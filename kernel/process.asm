@@ -30,3 +30,8 @@ _switch_to_task:
     popa
     
     ret
+
+; Helper to jump to User Mode via IRET
+global _enter_user_mode
+_enter_user_mode:
+    iretd

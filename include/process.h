@@ -16,6 +16,7 @@ extern process_t *current_process;
 // Functions
 void process_init(void);
 void process_create(void (*entry_point)(void));
+void process_create_user(void (*entry_point)(void));
 void schedule(void);
 void process_yield(void);
 

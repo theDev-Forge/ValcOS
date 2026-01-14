@@ -80,6 +80,62 @@ void process_create(void (*entry_point)(void)) {
     }
 }
 
+extern void enter_user_mode(void);
+
+void process_create_user(void (*entry_point)(void)) {
+    // 1. Allocate PCB
+    process_t *proc = (process_t*)kmalloc(sizeof(process_t));
+    proc->pid = next_pid++;
+    proc->next = NULL;
+
+    // 2. Allocate Kernel Stack (4KB)
+    uint32_t *kstack = (uint32_t*)kmalloc(4096);
+    uint32_t *ktop = kstack + 1024;
+    
+    proc->kernel_stack_top = (uint32_t)ktop; // Save Top for TSS
+
+    // 3. Allocate User Stack (4KB)
+    uint32_t *ustack = (uint32_t*)kmalloc(4096);
+    uint32_t user_esp = (uint32_t)(ustack + 1024);
+
+    // 4. Setup Trap Frame for IRET (User Mode Switch)
+    // Stack: [SS] [ESP] [EFLAGS] [CS] [EIP]
+    *(--ktop) = 0x23;                   // User SS (Ring 3 Data)
+    *(--ktop) = user_esp;               // User ESP
+    *(--ktop) = 0x202;                  // User EFLAGS (IE=1)
+    *(--ktop) = 0x1B;                   // User CS (Ring 3 Code)
+    *(--ktop) = (uint32_t)entry_point;  // User EIP
+
+    // 5. Setup Stack Frame for switch_to_task
+    // RET will jump to enter_user_mode (which does IRET)
+    *(--ktop) = (uint32_t)enter_user_mode;
+
+    // PUSHA/POPA Registers
+    *(--ktop) = 0; // EAX
+    *(--ktop) = 0; // ECX
+    *(--ktop) = 0; // EDX
+    *(--ktop) = 0; // EBX
+    *(--ktop) = 0; // ESP
+    *(--ktop) = 0; // EBP
+    *(--ktop) = 0; // ESI
+    *(--ktop) = 0; // EDI
+    
+    *(--ktop) = 0x202;                  // Kernel EFLAGS
+
+    proc->esp = ktop;
+
+    // 6. Add to Queue
+    if (ready_queue_tail) {
+        ready_queue_tail->next = proc;
+        ready_queue_tail = proc;
+        proc->next = ready_queue_head;
+    } else {
+        ready_queue_head = proc;
+        ready_queue_tail = proc;
+        proc->next = proc;
+    }
+}
+
 void schedule(void) {
     if (!current_process) return;
     
