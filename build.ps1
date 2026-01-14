@@ -7,8 +7,8 @@ Write-Host ""
 # Check for required tools
 $tools = @{
     "nasm" = "NASM (Netwide Assembler)"
-    "gcc" = "GCC (GNU Compiler Collection)"
-    "ld" = "LD (GNU Linker)"
+    "gcc"  = "GCC (GNU Compiler Collection)"
+    "ld"   = "LD (GNU Linker)"
 }
 
 $missingTools = @()
@@ -17,7 +17,8 @@ foreach ($tool in $tools.Keys) {
     if (-not $found) {
         $missingTools += $tools[$tool]
         Write-Host "ERROR: $($tools[$tool]) not found!" -ForegroundColor Red
-    } else {
+    }
+    else {
         Write-Host "✓ Found $($tools[$tool])" -ForegroundColor Green
     }
 }
@@ -115,4 +116,4 @@ Write-Host ""
 Write-Host "Build successful!" -ForegroundColor Green
 Write-Host "OS image: build/ValcOS.img" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "To run: qemu-system-x86_64 -drive format=raw,file=build/ValcOS.img" -ForegroundColor Yellow
+Write-Host "To run: & 'C:\Program Files\qemu\qemu-system-x86_64.exe' -fda build/ValcOS.img -boot a" -ForegroundColor Yellow

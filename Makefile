@@ -9,7 +9,7 @@ OBJCOPY = objcopy
 # Flags
 ASM_FLAGS = -f elf32
 C_FLAGS = -m32 -ffreestanding -nostdlib -fno-pie -fno-stack-protector -c -Wall -Wextra
-LD_FLAGS = -m i386pe --oformat pe-i386 -e _kernel_entry -Ttext 0x1000
+LD_FLAGS = -m i386pe --oformat pe-i386 -e _kernel_entry -Ttext 0x10000
 
 # Directories
 BUILD_DIR = build
@@ -21,7 +21,7 @@ INCLUDE_DIR = include
 # Source files
 BOOT_SRC = $(BOOT_DIR)/boot.asm
 KERNEL_ENTRY_SRC = $(KERNEL_DIR)/kernel_entry.asm
-KERNEL_SRC = $(KERNEL_DIR)/kernel.c $(KERNEL_DIR)/idt.c $(KERNEL_DIR)/shell.c $(KERNEL_DIR)/string.c
+KERNEL_SRC = $(KERNEL_DIR)/kernel.c $(KERNEL_DIR)/idt.c $(KERNEL_DIR)/shell.c $(KERNEL_DIR)/string.c $(KERNEL_DIR)/memory.c
 DRIVER_SRC = $(DRIVERS_DIR)/vga.c $(DRIVERS_DIR)/keyboard.c $(DRIVERS_DIR)/timer.c
 
 # Object files
@@ -83,8 +83,10 @@ clean:
 	@rm -rf $(BUILD_DIR)
 	@echo "Clean complete."
 
+QEMU = "C:\Program Files\qemu\qemu-system-x86_64.exe"
+
 # Run in QEMU
 run: $(OS_IMAGE)
-	qemu-system-x86_64 -drive format=raw,file=$(OS_IMAGE)
+	$(QEMU) -fda $(OS_IMAGE) -boot a
 
 .PHONY: all clean run

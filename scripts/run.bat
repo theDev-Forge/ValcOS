@@ -8,4 +8,4 @@ if not exist build\ValcOS.img (
     exit /b 1
 )
 
-qemu-system-x86_64 -drive format=raw,file=build\ValcOS.img
+"C:\Program Files\qemu\qemu-system-x86_64.exe" -fda build\ValcOS.img -boot a

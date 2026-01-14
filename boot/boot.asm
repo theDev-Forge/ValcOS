@@ -9,16 +9,98 @@ start:
     mov ss, ax
     mov sp, 0x7C00
     
-    ; Load kernel from disk
-    mov bx, 0x1000      ; Load kernel at 0x1000
-    mov ah, 0x02        ; Read sectors function
-    mov al, 20          ; Number of sectors to read
-    mov ch, 0           ; Cylinder 0
-    mov cl, 2           ; Start from sector 2
-    mov dh, 0           ; Head 0
-    int 0x13            ; BIOS disk interrupt
+    mov [boot_drive], dl ; Save boot drive
     
-    jc disk_error       ; Jump if error
+    ; Print loading message
+    mov si, load_msg
+    call print_string
+    
+    ; Load kernel from disk
+    mov ax, 0x1000
+    mov es, ax          ; ES = 0x1000 (Load to 0x10000)
+    mov bx, 0           ; BX = 0
+    mov dh, 0           ; Head 0
+    mov dl, [boot_drive] ; Use saved boot drive
+    mov cx, 0x0002      ; CH=0 (Cyl), CL=2 (Sector)
+    mov si, 100         ; Read 100 sectors
+
+read_loop:
+    push cx
+    push dx
+    push bx
+    
+    mov di, 5           ; Retry count 5
+
+.retry:
+    mov ah, 0x02
+    mov al, 1
+    push di
+    int 0x13
+    pop di
+    jnc .success        ; Success?
+    
+    ; Reset disk and retry
+    xor ah, ah
+    int 0x13
+    dec di
+    jnz .retry
+    
+    jmp disk_error      ; Failed after retries
+
+.success:
+    pop bx
+    pop dx
+    pop cx
+    
+    ; Print dot
+    mov ah, 0x0E
+    mov al, '.'
+    int 0x10
+    
+    add bx, 512         ; Next buffer
+    dec si              ; Decrement count
+    jz read_done
+    
+    inc cl              ; Next sector
+    cmp cl, 19
+    jl read_loop
+    
+    mov cl, 1           ; Sector 1
+    inc dh              ; Next head
+    cmp dh, 2
+    jl read_loop
+    
+    mov dh, 0           ; Head 0
+    inc ch
+    jmp read_loop
+
+read_done:
+    xor ax, ax
+    mov es, ax          ; Reset ES to 0 for E820 map
+
+    ; Get memory map (E820)
+    mov di, 0x7004      ; Store map entries at 0x7004 (below bootloader)
+    xor ebx, ebx        ; continuation context
+    xor bp, bp          ; entry count
+    mov edx, 0x534D4150 ; 'SMAP' signature
+    mov eax, 0xE820
+    mov ecx, 24         ; buffer size
+    int 0x15
+    jc memory_error     ; unsupported
+
+mem_loop:
+    inc bp              ; increment entry count
+    add di, 24          ; point to next entry
+    test ebx, ebx       ; if ebx is 0, list is done
+    jz mem_done
+    mov edx, 0x534D4150 ; 'SMAP' signature (reset required)
+    mov eax, 0xE820
+    mov ecx, 24
+    int 0x15
+    jnc mem_loop
+
+mem_done:
+    mov [0x7000], bp    ; store entry count at 0x7000
     
     ; Switch to protected mode
     cli
@@ -35,6 +117,11 @@ disk_error:
     call print_string
     jmp $
 
+memory_error:
+    mov si, mem_error_msg
+    call print_string
+    jmp $
+
 print_string:
     lodsb
     or al, al
@@ -46,6 +133,9 @@ done:
     ret
 
 error_msg db 'Disk read error!', 0
+mem_error_msg db 'Memory map error!', 0
+load_msg db 'Loading ValcOS...', 13, 10, 0
+boot_drive db 0
 
 ; GDT (Global Descriptor Table)
 gdt_start:
@@ -91,7 +181,7 @@ protected_mode:
     mov esp, 0x90000
     
     ; Jump to kernel
-    jmp 0x1000
+    jmp 0x10000
 
 ; Boot signature
 times 510-($-$$) db 0

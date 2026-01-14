@@ -3,6 +3,7 @@
 #include "keyboard.h"
 #include "shell.h"
 #include "timer.h"
+#include "memory.h"
 
 void kernel_main(void) {
     // Initialize VGA display
@@ -13,6 +14,9 @@ void kernel_main(void) {
     
     // Initialize timer
     init_timer(50);
+    
+    // Initialize memory
+    memory_init();
     
     // Initialize keyboard
     keyboard_init();
