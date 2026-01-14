@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 typedef struct process {
-    uint32_t *esp;       // Stack Pointer (Must be first for Assembly simplicity)
+    uint32_t esp;        // Stack Pointer (Must be first for Assembly simplicity)
     uint32_t pid;        // Process ID
     uint32_t kernel_stack_top; // For TSS: where to restart kernel stack on interrupt
     uint32_t cr3;        // Page Directory Physical Address

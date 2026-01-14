@@ -2,6 +2,7 @@
 #include "pmm.h"
 #include "string.h"
 #include "vga.h"
+#include "process.h"
 
 // Page Directory Entry (PDE)
 // Bit 0: Present
@@ -119,18 +120,20 @@ void page_fault_handler(uint32_t err_code) {
     uint32_t fault_addr;
     __asm__ volatile("mov %%cr2, %0" : "=r" (fault_addr));
     
-    vga_print("\n[PAGE FAULT] Addr: 0x");
+    vga_print("\n[PAGE FAULT] ");
     
-    char hex[] = "0123456789ABCDEF";
+    const char *digits = "0123456789ABCDEF";
+    
+    vga_print("Addr: 0x");
     for (int i = 28; i >= 0; i -= 4) {
-        char c = hex[(fault_addr >> i) & 0xF];
+        char c = digits[(fault_addr >> i) & 0xF];
         char str[2] = {c, '\0'};
         vga_print(str);
     }
     
     vga_print(" Err: 0x");
     for (int i = 28; i >= 0; i -= 4) {
-        char c = hex[(err_code >> i) & 0xF];
+        char c = digits[(err_code >> i) & 0xF];
         char str[2] = {c, '\0'};
         vga_print(str);
     }

@@ -23,7 +23,14 @@ void process_init(void) {
     kernel_proc->pid = 0;
     kernel_proc->esp = 0; // Will be set by switch_to_task
     kernel_proc->cr3 = vmm_get_kernel_directory();
-    kernel_proc->next = NULL;
+    
+    // Get current ESP for kernel stack top
+    uint32_t current_esp;
+    __asm__ volatile("mov %%esp, %0" : "=r"(current_esp));
+    kernel_proc->kernel_stack_top = current_esp;
+    
+    // IMPORTANT: Point to itself to form circular queue
+    kernel_proc->next = kernel_proc;
     
     current_process = kernel_proc;
     ready_queue_head = kernel_proc;
@@ -71,7 +78,7 @@ void process_create(void (*entry_point)(void)) {
     
     *(--top) = 0x202;                   // EFLAGS (Overwrites top, Interrupts Enabled)
     
-    proc->esp = top;
+    proc->esp = (uint32_t)top;
     
     // 4. Add to Queue
     if (ready_queue_tail) {
@@ -142,7 +149,7 @@ void process_create_user(void (*entry_point)(void)) {
     
     *(--ktop) = 0x202;                  // Kernel EFLAGS
 
-    proc->esp = ktop;
+    proc->esp = (uint32_t)ktop;
 
     // 6. Add to Queue
     if (ready_queue_tail) {
@@ -162,17 +169,23 @@ void schedule(void) {
     process_t *next = current_process->next;
     if (!next) return;
     
-    if (next != current_process) {
-        // Update TSS to use the new process's kernel stack for interrupts
-        set_kernel_stack(next->kernel_stack_top);
-        
-        // Switch Page Directory
-        if (next->cr3) {
-            vmm_switch_directory(next->cr3);
-        }
-        
-        switch_to_task(next);
+    // Don't switch if we're switching to ourselves
+    if (next == current_process) return;
+    
+    // Update TSS to use the new process's kernel stack for interrupts
+    set_kernel_stack(next->kernel_stack_top);
+    
+    // Switch Page Directory
+    if (next->cr3) {
+        vmm_switch_directory(next->cr3);
     }
+    
+    // switch_to_task will:
+    // 1. Save current ESP to current_process->esp
+    // 2. Update current_process = next
+    // 3. Load next->esp and restore its state
+    switch_to_task(next);
+    // Note: current_process is updated inside switch_to_task
 }
 
 void process_yield(void) {
