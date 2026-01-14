@@ -4,6 +4,7 @@
 #include "string.h"
 #include "fat12.h"
 #include "memory.h"
+#include "process.h"
 
 #define CMD_BUFFER_SIZE 256
 
@@ -56,6 +57,25 @@ static void shell_execute_command(const char* cmd) {
         vga_print_color("ValcOS v0.1\n", vga_color(VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK));
         vga_print("A simple operating system built from scratch\n");
         vga_print("Created with passion and determination!\n\n");
+    }
+    else if (cmd[0] == 'e' && cmd[1] == 'x' && cmd[2] == 'e' && cmd[3] == 'c' && cmd[4] == ' ') {
+        const char *filename = cmd + 5;
+        // Allocate executable memory (8KB for now)
+        uint8_t *prog_buf = (uint8_t*)kmalloc(8192);
+        if (prog_buf) {
+            int bytes = fat12_read_file(filename, prog_buf);
+            if (bytes > 0) {
+                 vga_print("\nExecuting ");
+                 vga_print((char*)filename);
+                 vga_print("...\n\n");
+                 process_create_user((void (*)(void))prog_buf);
+            } else {
+                 vga_print("\nFile not found.\n\n");
+                 // kfree(prog_buf); // Memory leak until kfree implemented
+            }
+        } else {
+             vga_print("\nMemory error.\n\n");
+        }
     }
     else if (cmd[0] == 'e' && cmd[1] == 'c' && cmd[2] == 'h' && cmd[3] == 'o' && cmd[4] == ' ') {
         vga_print("\n");

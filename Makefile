@@ -17,8 +17,8 @@ BOOT_DIR = boot
 KERNEL_DIR = kernel
 DRIVERS_DIR = drivers
 INCLUDE_DIR = include
+APPS_DIR = apps
 
-# Source files
 # Source files
 BOOT_SRC = $(BOOT_DIR)/boot.asm
 KERNEL_ENTRY_SRC = $(KERNEL_DIR)/kernel_entry.asm
@@ -29,14 +29,6 @@ DRIVER_SRC = $(DRIVERS_DIR)/vga.c $(DRIVERS_DIR)/keyboard.c $(DRIVERS_DIR)/timer
 BOOT_BIN = $(BUILD_DIR)/boot.bin
 KERNEL_ENTRY_OBJ = $(BUILD_DIR)/kernel_entry.o
 PROCESS_ASM_OBJ = $(BUILD_DIR)/process_asm.o
-KERNEL_OBJ = $(patsubst $(KERNEL_DIR)/%.c, $(BUILD_DIR)/%.o, $(KERNEL_SRC))
-KERNEL_OBJ := $(KERNEL_OBJ:fs/%.o=$(BUILD_DIR)/%.o) # Fix path for fs/fat12.c
-# Actually simpler: just let the pattern match handle it if I use VPATH or explicit rules.
-# But KERNEL_OBJ definition above assumes $(KERNEL_DIR)/%.c -> $(BUILD_DIR)/%.o
-# This fails for fs/fat12.c.
-# Let's fix KERNEL_OBJ and DRIVER_OBJ definitions properly.
-
-# Explicit object lists
 KERNEL_OBJS = $(BUILD_DIR)/kernel.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/shell.o $(BUILD_DIR)/string.o $(BUILD_DIR)/memory.o $(BUILD_DIR)/fat12.o $(BUILD_DIR)/process.o $(PROCESS_ASM_OBJ) $(BUILD_DIR)/gdt.o $(BUILD_DIR)/tss.o $(BUILD_DIR)/syscall.o
 DRIVER_OBJS = $(BUILD_DIR)/vga.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/timer.o
 
@@ -45,12 +37,18 @@ KERNEL_ELF = $(BUILD_DIR)/kernel.elf
 KERNEL_BIN = $(BUILD_DIR)/kernel.bin
 OS_IMAGE = $(BUILD_DIR)/ValcOS.img
 
+# Apps
+APPS_SRC = $(APPS_DIR)/hello.asm
+APPS_BIN = $(BUILD_DIR)/hello.bin
+
 # Default target
 all: $(OS_IMAGE)
 
 # Create OS image
-$(OS_IMAGE): $(BOOT_BIN) $(KERNEL_BIN)
+$(OS_IMAGE): $(BOOT_BIN) $(KERNEL_BIN) $(APPS_BIN)
 	@echo "Creating FAT12 Image..."
+	@mkdir -p rootfs
+	@cp $(APPS_BIN) rootfs/hello.bin
 	@$(PYTHON) scripts/make_fat12.py
 	@echo "Build complete: $(OS_IMAGE)"
 
@@ -76,6 +74,11 @@ $(PROCESS_ASM_OBJ): $(KERNEL_DIR)/process.asm
 	@echo "Assembling process context switch..."
 	nasm -f elf32 $< -o $@
 
+# Build Apps
+$(BUILD_DIR)/%.bin: $(APPS_DIR)/%.asm | $(BUILD_DIR)
+	@echo "Assembling App $<..."
+	nasm -f bin $< -o $@
+
 # Build kernel C files
 $(BUILD_DIR)/%.o: $(KERNEL_DIR)/%.c | $(BUILD_DIR)
 	@echo "Compiling $<..."
@@ -93,12 +96,13 @@ $(BUILD_DIR)/%.o: $(DRIVERS_DIR)/%.c | $(BUILD_DIR)
 
 # Create build directory
 $(BUILD_DIR):
-	@mkdir -p $(BUILD_DIR)
+	@if not exist $(BUILD_DIR) mkdir $(BUILD_DIR)
 
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."
 	@rm -rf $(BUILD_DIR)
+	@rm -rf rootfs
 	@echo "Clean complete."
 
 QEMU = "C:\Program Files\qemu\qemu-system-x86_64.exe"

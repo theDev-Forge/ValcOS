@@ -6,8 +6,7 @@ import os
 BOOTLOADER_FILE = "build/boot.bin"
 KERNEL_FILE = "build/kernel.bin"
 OUTPUT_FILE = "build/ValcOS.img"
-SAMPLE_FILE = "hello.txt"
-SAMPLE_CONTENT = "Hello from FAT12! This is a text file read from the disk."
+ROOT_DIR = "rootfs"
 
 # FAT12 Constants
 SECTOR_SIZE = 512
@@ -18,117 +17,148 @@ ROOT_ENTRIES = 224
 TOTAL_SECTORS = 2880
 MEDIA_DESCRIPTOR = 0xF0
 SECTORS_PER_FAT = 9
-SECTORS_PER_TRACK = 18
-HEAD_COUNT = 2
 
-def create_image():
-    # 1. Create empty image
-    image_size = TOTAL_SECTORS * SECTOR_SIZE
-    data = bytearray(image_size)
+class FAT12:
+    def __init__(self, filename):
+        self.filename = filename
+        self.data = bytearray(TOTAL_SECTORS * SECTOR_SIZE)
+        self.fat_start = RESERVED_SECTORS * SECTOR_SIZE
+        self.fat_size = SECTORS_PER_FAT * SECTOR_SIZE
+        self.root_dir_start = self.fat_start + (FAT_COUNT * self.fat_size)
+        self.root_dir_size = ROOT_ENTRIES * 32
+        self.data_start = self.root_dir_start + self.root_dir_size
+        self.current_cluster = 2
 
-    # 2. Write Bootloader (Sector 0)
-    print(f"Reading bootloader from {BOOTLOADER_FILE}...")
-    with open(BOOTLOADER_FILE, "rb") as f:
-        bootloader = f.read()
-        if len(bootloader) > 512:
-            print(f"Warning: Bootloader size {len(bootloader)} > 512 bytes!")
-        data[0:len(bootloader)] = bootloader
+    def format(self):
+        # 1. Write Bootloader
+        if os.path.exists(BOOTLOADER_FILE):
+            print(f"Reading bootloader from {BOOTLOADER_FILE}...")
+            with open(BOOTLOADER_FILE, "rb") as f:
+                boot = f.read()
+                if len(boot) > 512:
+                    print("Warning: Bootloader > 512 bytes")
+                self.data[0:len(boot)] = boot
+        else:
+            print(f"Warning: {BOOTLOADER_FILE} not found")
 
-    # 3. Write Kernel (Reserved Sectors, starting at Sector 1)
-    print(f"Reading kernel from {KERNEL_FILE}...")
-    with open(KERNEL_FILE, "rb") as f:
-        kernel = f.read()
-        kernel_sectors = (len(kernel) + SECTOR_SIZE - 1) // SECTOR_SIZE
-        print(f"Kernel size: {len(kernel)} bytes ({kernel_sectors} sectors)")
+        # 2. Write Kernel
+        if os.path.exists(KERNEL_FILE):
+            print(f"Reading kernel from {KERNEL_FILE}...")
+            with open(KERNEL_FILE, "rb") as f:
+                kernel = f.read()
+                k_sectors = (len(kernel) + SECTOR_SIZE - 1) // SECTOR_SIZE
+                print(f"Kernel size: {len(kernel)} bytes ({k_sectors} sectors)")
+                if k_sectors > (RESERVED_SECTORS - 1):
+                    raise Exception("Kernel too big for reserved area")
+                self.data[SECTOR_SIZE:SECTOR_SIZE+len(kernel)] = kernel
+        else:
+            print(f"Warning: {KERNEL_FILE} not found")
+
+        # 3. Initialize FATs
+        # Entry 0: Media (F0) + FF
+        # Entry 1: End Chain (FF) + High nibble of Entry 1 usually? 
+        # Standard: F0 FF FF
+        self.data[self.fat_start] = 0xF0
+        self.data[self.fat_start+1] = 0xFF
+        self.data[self.fat_start+2] = 0xFF
         
-        if kernel_sectors > (RESERVED_SECTORS - 1):
-             print(f"Error: Kernel too big for reserved area! Increase RESERVED_SECTORS in boot.asm and here.")
-             return
+        # Copy to FAT2
+        self.data[self.fat_start+self.fat_size : self.fat_start+self.fat_size+3] = self.data[self.fat_start:self.fat_start+3]
 
-        data[SECTOR_SIZE:SECTOR_SIZE + len(kernel)] = kernel
+    def add_file(self, filename, content):
+        # Find free directory entry
+        entry_idx = -1
+        for i in range(ROOT_ENTRIES):
+            offset = self.root_dir_start + (i * 32)
+            if self.data[offset] == 0:
+                entry_idx = i
+                break
+        
+        if entry_idx == -1:
+            raise Exception("Root directory full")
 
-    # 4. Initialize FAT Tables
-    # FAT Entry 0: Media Descriptor (0xF0) + FF
-    # FAT Entry 1: End of Chain marker (0xFF) + F (packed as F0 FF FF)
-    # Actually for FAT12:
-    # Entry 0 = 0xF0
-    # Entry 1 = 0xFF
-    # Low 12 bits of Entry 2 (Cluster 2)
-    # In bytes: F0 FF FF (matches Media + 2 reserved entries)
-    
-    fat_start = RESERVED_SECTORS * SECTOR_SIZE
-    fat_size = SECTORS_PER_FAT * SECTOR_SIZE
-    
-    # Initialize both FATs with Empty clusters (0x00)
-    # But first 2 entries are reserved
-    fat_data = bytearray(fat_size)
-    fat_data[0] = 0xF0
-    fat_data[1] = 0xFF
-    fat_data[2] = 0xFF
-    
-    # Write FAT1
-    data[fat_start : fat_start + fat_size] = fat_data
-    # Write FAT2
-    data[fat_start + fat_size : fat_start + 2*fat_size] = fat_data
+        file_size = len(content)
+        start_cluster = self.current_cluster
+        
+        # Calculate valid 8.3 filename
+        # Basic conversion
+        upper_name = filename.upper()
+        name_parts = upper_name.split('.')
+        base = name_parts[0][:8].ljust(8)
+        ext = name_parts[1][:3].ljust(3) if len(name_parts) > 1 else "   "
+        
+        dos_name = (base + ext).encode('ascii')
+        
+        # Helper to pack
+        # Name(11), Attr(1), Res(10), Time(2), Date(2), Cluster(2), Size(4)
+        entry_offset = self.root_dir_start + (entry_idx * 32)
+        
+        self.data[entry_offset:entry_offset+11] = dos_name
+        self.data[entry_offset+11] = 0x20 # Archive
+        struct.pack_into("<H", self.data, entry_offset+26, start_cluster)
+        struct.pack_into("<I", self.data, entry_offset+28, file_size)
 
-    # 5. Root Directory
-    root_dir_start = fat_start + 2*fat_size
-    root_dir_size = ROOT_ENTRIES * 32
-    
-    # Add Sample File
-    file_cluster = 2 # First available cluster
-    file_size = len(SAMPLE_CONTENT)
-    
-    # Create Directory Entry
-    # Name (8), Ext (3), Attr (1), Res(10), Time(2), Date(2), Cluster(2), Size(4)
-    name = b"HELLO   TXT"
-    attr = 0x20 # Archive
-    cluster = struct.pack("<H", file_cluster)
-    size = struct.pack("<I", file_size)
-    
-    entry = name + struct.pack("B", attr) + b'\x00'*10 + b'\x00\x00\x00\x00' + cluster + size
-    
-    # Write to first entry in Root Dir
-    data[root_dir_start : root_dir_start + 32] = entry
-    
-    # 6. Write File Content
-    data_region_start = root_dir_start + root_dir_size
-    # Cluster 2 is the first cluster in data region.
-    # Data region index 0 corresponds to Cluster 2.
-    file_offset = data_region_start + (file_cluster - 2) * SECTORS_PER_CLUSTER * SECTOR_SIZE
-    
-    data[file_offset : file_offset + file_size] = SAMPLE_CONTENT.encode('utf-8')
-    
-    # Mark Cluster 2 as End of Chain (0xFFF) in FAT
-    # Entry 2 is at byte offset (2 * 12bits) / 8 = 3 bytes.
-    # 0 -> F0 FF FF (Entries 0 and 1)
-    # Entry 2 starts at nibble 0 of byte 3? 
-    # FAT12 packing:
-    # Byte 0: Entry 0 (low 8) -> F0
-    # Byte 1: Entry 0 (high 4) | Entry 1 (low 4) -> F | F -> FF
-    # Byte 2: Entry 1 (high 8) -> FF
-    # Byte 3: Entry 2 (low 8)
-    # Byte 4: Entry 2 (high 4) | Entry 3 (low 4)
-    
-    # We want Entry 2 to be 0xFFF.
-    # Offset 3 (byte index 3) is 0x00 by default.
-    # We need to write 0xFF to Byte 3, and 0x0F to low nibble of Byte 4.
-    
-    # Updating FAT copy in memory buffer
-    fat_offset = fat_start
-    data[fat_offset + 3] = 0xFF
-    data[fat_offset + 4] = 0x0F # Low nibble F, high nibble 0 (Entry 3, which is free)
-    
-    # Update FAT2 as well
-    fat2_offset = fat_start + fat_size
-    data[fat2_offset + 3] = 0xFF
-    data[fat2_offset + 4] = 0x0F
+        # Write Data
+        # Assume contiguous for now
+        clusters_needed = (file_size + SECTOR_SIZE - 1) // SECTOR_SIZE
+        
+        for i in range(clusters_needed):
+            cluster_num = start_cluster + i
+            
+            # Write FAT entry
+            is_last = (i == clusters_needed - 1)
+            next_cluster = 0xFFF if is_last else (cluster_num + 1)
+            
+            self.set_fat_entry(cluster_num, next_cluster)
+            
+            # Write Data Sector
+            # Cluster 2 is at offset 0 of data area
+            data_offset = self.data_start + ((cluster_num - 2) * SECTOR_SIZE)
+            
+            chunk = content[i*SECTOR_SIZE : (i+1)*SECTOR_SIZE]
+            self.data[data_offset:data_offset+len(chunk)] = chunk
 
-    # 7. Write Image
-    print(f"Writing disk image to {OUTPUT_FILE}...")
-    with open(OUTPUT_FILE, "wb") as f:
-        f.write(data)
-    print("Done!")
+        self.current_cluster += clusters_needed
+
+    def set_fat_entry(self, cluster, value):
+        # FAT12: 12 bits per entry.
+        # Offset = floor(cluster * 1.5)
+        offset = self.fat_start + int(cluster * 1.5)
+        
+        # Read 16 bits
+        val = struct.unpack_from("<H", self.data, offset)[0]
+        
+        if cluster % 2 == 0:
+            # Low 12 bits
+            val = (val & 0xF000) | (value & 0x0FFF)
+        else:
+            # High 12 bits
+            val = (val & 0x000F) | ((value & 0x0FFF) << 4)
+            
+        struct.pack_into("<H", self.data, offset, val)
+        # Mirror to FAT2
+        struct.pack_into("<H", self.data, offset + self.fat_size, val)
+
+    def save(self):
+        print(f"Writing disk image to {OUTPUT_FILE}...")
+        with open(OUTPUT_FILE, "wb") as f:
+            f.write(self.data)
 
 if __name__ == "__main__":
-    create_image()
+    fs = FAT12(OUTPUT_FILE)
+    fs.format()
+    
+    if not os.path.exists(ROOT_DIR):
+        os.makedirs(ROOT_DIR)
+        with open(os.path.join(ROOT_DIR, "README.TXT"), "w") as f:
+            f.write("Welcome to ValcOS!\n")
+
+    print(f"Scanning {ROOT_DIR}...")
+    for fname in os.listdir(ROOT_DIR):
+        fpath = os.path.join(ROOT_DIR, fname)
+        if os.path.isfile(fpath):
+            print(f"Adding {fname}...")
+            with open(fpath, "rb") as f:
+                fs.add_file(fname, f.read())
+
+    fs.save()
