@@ -175,6 +175,43 @@ static void shell_execute_command(const char* cmd) {
         vga_print(&cmd[5]);
         vga_print("\n\n");
     }
+    else if (cmd[0] == 't' && cmd[1] == 'o' && cmd[2] == 'u' && cmd[3] == 'c' && cmd[4] == 'h' && cmd[5] == ' ') {
+        const char *filename = cmd + 6;
+        if (fat12_create_file(filename)) {
+            vga_print("\nFile created.\n\n");
+        } else {
+            vga_print("\nFailed to create file (Disk full or exists).\n\n");
+        }
+    }
+    else if (cmd[0] == 'w' && cmd[1] == 'r' && cmd[2] == 'i' && cmd[3] == 't' && cmd[4] == 'e' && cmd[5] == ' ') {
+        // write filename text...
+        // Need to split args
+        char *filename = (char*)cmd + 6;
+        char *text = NULL;
+        
+        // Find space
+        int i=0;
+        while(filename[i] != 0) {
+            if(filename[i] == ' ') {
+                filename[i] = 0; // Split string
+                text = filename + i + 1;
+                break;
+            }
+            i++;
+        }
+        
+        if (text) {
+             if (fat12_write_file(filename, (uint8_t*)text, strlen(text))) {
+                  vga_print("\nFile written.\n\n");
+             } else {
+                  vga_print("\nAvailable file not found to write.\n\n");
+             }
+             // Restore space for history integrity (optional)
+             filename[i] = ' ';
+        } else {
+             vga_print("\nUsage: write <filename> <text>\n\n");
+        }
+    }
     else if (strlen(cmd) > 0) {
         vga_print("\n");
         vga_print_color("Unknown command: ", vga_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));

@@ -29,6 +29,12 @@ typedef struct {
 
 void fat12_init(void);
 void fat12_list_directory(void);
+// Read a file into buffer, returns bytes read
 int fat12_read_file(const char *filename, uint8_t *buffer);
+
+// Create a new empty file
+int fat12_create_file(const char *filename);
+// Write data to an existing file
+int fat12_write_file(const char *filename, const uint8_t *data, uint32_t size);
 
 #endif
