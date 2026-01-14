@@ -3,6 +3,13 @@
 
 #include <stdint.h>
 
+// Registers struct (Pushed by PUSHA + CPU Interrupt)
+typedef struct {
+    uint32_t edi, esi, ebp, esp, ebx, edx, ecx, eax; // Pushed by pusha
+    uint32_t eip, cs, eflags;                        // Pushed by CPU
+    uint32_t user_esp, user_ss;                      // Pushed by CPU if switching rings
+} __attribute__((packed)) registers_t;
+
 // IDT entry structure
 struct idt_entry {
     uint16_t base_low;

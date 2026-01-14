@@ -41,6 +41,32 @@ _timer_handler_asm:
     popa
     iretd
 
+; GDT flush
+global _gdt_flush
+_gdt_flush:
+    mov eax, [esp + 4]  ; Get GDT pointer arg
+    lgdt [eax]          ; Load GDT
+
+    mov ax, 0x10        ; Kernel Data Segment offset
+    mov ds, ax
+    mov es, ax
+    mov fs, ax
+    mov gs, ax
+    mov ss, ax
+    
+    jmp 0x08:.flush     ; Far jump to reload CS (0x08)
+.flush:
+    ret
+
+; System Call handler wrapper
+global _syscall_handler_asm
+extern _syscall_handler
+_syscall_handler_asm:
+    pusha               ; Save registers (EAX is syscall num)
+    call _syscall_handler
+    popa                ; Restore registers (EAX restored to original value, so no return val support yet)
+    iretd
+
 
 
 section .bss

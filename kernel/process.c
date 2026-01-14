@@ -1,6 +1,7 @@
 #include "process.h"
 #include "memory.h"
 #include "vga.h"
+#include "tss.h"
 
 process_t *current_process = NULL;
 process_t *ready_queue_head = NULL;
@@ -34,6 +35,8 @@ void process_create(void (*entry_point)(void)) {
     // 2. Allocate Stack (4KB)
     uint32_t *stack = (uint32_t*)kmalloc(4096);
     uint32_t *top = stack + 1024; // End of stack (grows down)
+    
+    proc->kernel_stack_top = (uint32_t)top; // Save Top Address for TSS
     
     // 3. Setup Stack Frame (simulating 'pusha' and 'pushf')
     // Values popped by switch_to_task:
@@ -82,9 +85,10 @@ void schedule(void) {
     
     process_t *next = current_process->next;
     if (!next) return;
-    // vga_print("S"); // Debug: Switching
     
     if (next != current_process) {
+        // Update TSS to use the new process's kernel stack for interrupts
+        set_kernel_stack(next->kernel_stack_top);
         switch_to_task(next);
     }
 }

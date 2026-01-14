@@ -1,5 +1,8 @@
 #include "vga.h"
+#include "gdt.h"
+#include "tss.h"
 #include "idt.h"
+#include "syscall.h"
 #include "timer.h"
 #include "memory.h"
 #include "fat12.h"
@@ -11,8 +14,17 @@ void kernel_main(void) {
     // Initialize VGA display
     vga_init();
     
+    // Initialize GDT (Global Descriptor Table)
+    init_gdt();
+    
+    // Initialize TSS (Task State Segment)
+    init_tss();
+    
     // Initialize interrupts
     idt_init();
+    
+    // Initialize System Calls
+    init_syscalls();
     
     // Initialize timer
     init_timer(50);
