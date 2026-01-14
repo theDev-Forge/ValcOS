@@ -68,18 +68,54 @@ void fat12_list_directory(void) {
 int fat12_read_file(const char *filename, uint8_t *buffer) {
     directory_entry_t *found = NULL;
     
+    // Prepare FAT name (11 chars, space padded, uppercase)
+    char fat_name[11];
+    for(int n=0; n<11; n++) fat_name[n] = ' '; // memset replacement
+    
+    int i = 0, j = 0;
+    // Process Name Part
+    while (filename[i] != '\0' && filename[i] != '.') {
+        if (j < 8) {
+            char c = filename[i];
+            if (c >= 'a' && c <= 'z') c -= 32; // To Upper
+            fat_name[j++] = c;
+        }
+        i++;
+    }
+    // Process Extension Part
+    if (filename[i] == '.') {
+        i++;
+        j = 8;
+        while (filename[i] != '\0') {
+            if (j < 11) {
+                char c = filename[i];
+                if (c >= 'a' && c <= 'z') c -= 32; // To Upper
+                fat_name[j++] = c;
+            }
+            i++;
+        }
+    }
+    
     // Scan Root
     for (int i = 0; i < ROOT_DIR_SECTORS; i++) {
         uint8_t *sector = get_sector_ptr(ROOT_DIR_START + i);
         directory_entry_t *entry = (directory_entry_t*)sector;
         
-        for (int j = 0; j < SECTOR_SIZE / 32; j++) {
-            if (entry[j].name[0] == 0x00) break;
-            if ((uint8_t)entry[j].name[0] == 0xE5) continue;
+        for (int k = 0; k < SECTOR_SIZE / 32; k++) {
+            if (entry[k].name[0] == 0x00) break;
+            if ((uint8_t)entry[k].name[0] == 0xE5) continue;
             
-            // Simple match
-            if (entry[j].name[0] == filename[0]) {
-                found = &entry[j];
+            // Compare 11 bytes
+            int match = 1;
+            for(int m=0; m<11; m++) {
+                if(entry[k].name[m] != fat_name[m]) {
+                    match = 0;
+                    break;
+                }
+            }
+            
+            if (match) {
+                found = &entry[k];
                 break;
             }
         }
