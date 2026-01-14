@@ -19,32 +19,54 @@ static const char scancode_to_ascii[] = {
 // External assembly interrupt handler
 extern void keyboard_handler_asm(void);
 
+static int extended_mode = 0;
+
 // Keyboard interrupt handler
 void keyboard_handler(void) {
     uint8_t scancode = inb(0x60);
     
-    // Only handle key press (not release)
+    // Check for Extended Byte (E0)
+    if (scancode == 0xE0) {
+        extended_mode = 1;
+        outb(0x20, 0x20); // EOI needed? Usually E0 is just a byte in the stream. Yes, need EOI.
+        return;
+    }
+    
+    // Handle Break Codes (Key Release)
     if (scancode & 0x80) {
-        // Send EOI to PIC
+        extended_mode = 0; // Reset state
         outb(0x20, 0x20);
         return;
     }
     
-    // Convert scancode to ASCII
-    if (scancode < sizeof(scancode_to_ascii)) {
-        char c = scancode_to_ascii[scancode];
-        if (c != 0) {
-            // Add to buffer
-            keyboard_buffer[buffer_end] = c;
-            buffer_end = (buffer_end + 1) % KEYBOARD_BUFFER_SIZE;
-            
-            // Display the character
-            if (c == '\b') {
+    char ascii = 0;
+    
+    if (extended_mode) {
+        extended_mode = 0; // Reset
+        // Map Arrow Keys to special non-printable ASCII
+        if (scancode == 0x48) ascii = 0x11;      // UP -> DC1
+        else if (scancode == 0x50) ascii = 0x12; // DOWN -> DC2
+    } else {
+        // Standard ASCII mapping
+        if (scancode < sizeof(scancode_to_ascii)) {
+            ascii = scancode_to_ascii[scancode];
+        }
+    }
+    
+    if (ascii != 0) {
+        // Add to buffer
+        keyboard_buffer[buffer_end] = ascii;
+        buffer_end = (buffer_end + 1) % KEYBOARD_BUFFER_SIZE;
+        
+        // Display only printable or newline/backspace
+        // Don't echo arrow keys directly to screen!
+        if (ascii >= 0x20 || ascii == '\n' || ascii == '\b') {
+             if (ascii == '\b') {
                 vga_putchar('\b');
-            } else if (c == '\n') {
+            } else if (ascii == '\n') {
                 vga_putchar('\n');
-            } else if (c != '\t') {
-                vga_putchar(c);
+            } else {
+                vga_putchar(ascii);
             }
         }
     }
