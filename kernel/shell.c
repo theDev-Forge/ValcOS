@@ -1,0 +1,76 @@
+#include "shell.h"
+#include "vga.h"
+#include "keyboard.h"
+#include "string.h"
+
+#define CMD_BUFFER_SIZE 256
+
+static char cmd_buffer[CMD_BUFFER_SIZE];
+static int cmd_pos = 0;
+
+static void shell_print_prompt(void) {
+    vga_print_color("ValcOS", vga_color(VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK));
+    vga_print_color("> ", vga_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
+}
+
+static void shell_execute_command(const char* cmd) {
+    if (strcmp(cmd, "help") == 0) {
+        vga_print_color("\nAvailable commands:\n", vga_color(VGA_COLOR_YELLOW, VGA_COLOR_BLACK));
+        vga_print("  help  - Display this help message\n");
+        vga_print("  clear - Clear the screen\n");
+        vga_print("  about - Show OS information\n");
+        vga_print("  echo  - Print text to screen\n\n");
+    }
+    else if (strcmp(cmd, "clear") == 0) {
+        vga_clear();
+    }
+    else if (strcmp(cmd, "about") == 0) {
+        vga_print("\n");
+        vga_print_color("ValcOS v0.1\n", vga_color(VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK));
+        vga_print("A simple operating system built from scratch\n");
+        vga_print("Created with passion and determination!\n\n");
+    }
+    else if (cmd[0] == 'e' && cmd[1] == 'c' && cmd[2] == 'h' && cmd[3] == 'o' && cmd[4] == ' ') {
+        vga_print("\n");
+        vga_print(&cmd[5]);
+        vga_print("\n\n");
+    }
+    else if (strlen(cmd) > 0) {
+        vga_print("\n");
+        vga_print_color("Unknown command: ", vga_color(VGA_COLOR_LIGHT_RED, VGA_COLOR_BLACK));
+        vga_print(cmd);
+        vga_print("\nType 'help' for available commands.\n\n");
+    }
+    else {
+        vga_print("\n");
+    }
+}
+
+void shell_init(void) {
+    vga_print_color("Welcome to ", vga_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
+    vga_print_color("ValcOS", vga_color(VGA_COLOR_LIGHT_CYAN, VGA_COLOR_BLACK));
+    vga_print_color("!\n", vga_color(VGA_COLOR_WHITE, VGA_COLOR_BLACK));
+    vga_print("Type 'help' to see available commands.\n\n");
+    shell_print_prompt();
+}
+
+void shell_run(void) {
+    while (1) {
+        char c = keyboard_getchar();
+        
+        if (c == '\n') {
+            cmd_buffer[cmd_pos] = '\0';
+            shell_execute_command(cmd_buffer);
+            cmd_pos = 0;
+            shell_print_prompt();
+        }
+        else if (c == '\b') {
+            if (cmd_pos > 0) {
+                cmd_pos--;
+            }
+        }
+        else if (cmd_pos < CMD_BUFFER_SIZE - 1) {
+            cmd_buffer[cmd_pos++] = c;
+        }
+    }
+}
