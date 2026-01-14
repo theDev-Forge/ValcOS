@@ -38,17 +38,18 @@ KERNEL_BIN = $(BUILD_DIR)/kernel.bin
 OS_IMAGE = $(BUILD_DIR)/ValcOS.img
 
 # Apps
-APPS_SRC = $(APPS_DIR)/hello.asm
-APPS_BIN = $(BUILD_DIR)/hello.bin
+APPS_SRC = $(APPS_DIR)/hello.asm $(APPS_DIR)/input.asm
+APPS_BIN = $(BUILD_DIR)/hello.bin $(BUILD_DIR)/input.bin
 
 # Default target
 all: $(OS_IMAGE)
 
 # Create OS image
+# Create OS image
 $(OS_IMAGE): $(BOOT_BIN) $(KERNEL_BIN) $(APPS_BIN)
 	@echo "Creating FAT12 Image..."
 	@mkdir -p rootfs
-	@cp $(APPS_BIN) rootfs/hello.bin
+	@cp $(APPS_BIN) rootfs/
 	@$(PYTHON) scripts/make_fat12.py
 	@echo "Build complete: $(OS_IMAGE)"
 

@@ -5,6 +5,6 @@
 #include "idt.h"
 
 void init_syscalls(void);
-void syscall_handler(registers_t regs);
+void syscall_handler(registers_t *regs);
 
 #endif

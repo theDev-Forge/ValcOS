@@ -62,9 +62,11 @@ _gdt_flush:
 global _syscall_handler_asm
 extern _syscall_handler
 _syscall_handler_asm:
-    pusha               ; Save registers (EAX is syscall num)
+    pusha               ; Save registers
+    push esp            ; Pass pointer to registers (stack) as argument
     call _syscall_handler
-    popa                ; Restore registers (EAX restored to original value, so no return val support yet)
+    add esp, 4          ; Clean up argument
+    popa                ; Restore registers (will load modified values from stack)
     iretd
 
 ; Page Fault Handler (INT 14)
