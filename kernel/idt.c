@@ -41,8 +41,8 @@ void idt_init(void) {
     outb(0x21, 0x01);
     outb(0xA1, 0x01);
     
-    // Mask all IRQs except IRQ1 (keyboard)
-    outb(0x21, 0xFD);
+    // Mask all IRQs except IRQ0 (timer) and IRQ1 (keyboard)
+    outb(0x21, 0xFC);
     outb(0xA1, 0xFF);
     
     // Load the IDT

@@ -22,7 +22,7 @@ INCLUDE_DIR = include
 BOOT_SRC = $(BOOT_DIR)/boot.asm
 KERNEL_ENTRY_SRC = $(KERNEL_DIR)/kernel_entry.asm
 KERNEL_SRC = $(KERNEL_DIR)/kernel.c $(KERNEL_DIR)/idt.c $(KERNEL_DIR)/shell.c $(KERNEL_DIR)/string.c
-DRIVER_SRC = $(DRIVERS_DIR)/vga.c $(DRIVERS_DIR)/keyboard.c
+DRIVER_SRC = $(DRIVERS_DIR)/vga.c $(DRIVERS_DIR)/keyboard.c $(DRIVERS_DIR)/timer.c
 
 # Object files
 BOOT_BIN = $(BUILD_DIR)/boot.bin

@@ -2,6 +2,7 @@
 #include "idt.h"
 #include "keyboard.h"
 #include "shell.h"
+#include "timer.h"
 
 void kernel_main(void) {
     // Initialize VGA display
@@ -9,6 +10,9 @@ void kernel_main(void) {
     
     // Initialize interrupts
     idt_init();
+    
+    // Initialize timer
+    init_timer(50);
     
     // Initialize keyboard
     keyboard_init();

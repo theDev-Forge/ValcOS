@@ -32,6 +32,15 @@ _keyboard_handler_asm:
     popa
     iretd
 
+; Timer interrupt handler wrapper
+global _timer_handler_asm
+extern _timer_handler
+_timer_handler_asm:
+    pusha
+    call _timer_handler
+    popa
+    iretd
+
 section .bss
     align 16
 kernel_stack_bottom:
