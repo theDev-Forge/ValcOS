@@ -11,10 +11,19 @@
 #include "process.h"
 #include "shell.h" // Keep shell.h for shell_init and shell_run
 #include "keyboard.h" // Keep keyboard.h for shell_init (which might use it)
+#include "vga_gfx.h"
 
 void kernel_main(void) {
     // Initialize VGA display
     vga_init();
+    
+    // BOOT SPLASH (Text Mode)
+    vga_draw_splash_text();
+    
+    // Busy wait approx 3 seconds
+    for(volatile int i=0; i<300000000; i++);
+    
+    vga_clear();
     
     // Initialize GDT (Global Descriptor Table)
     init_gdt();

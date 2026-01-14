@@ -233,7 +233,7 @@ int process_kill(uint32_t pid) {
     if (!ready_queue_head) return 0;
     
     process_t *curr = ready_queue_head;
-    process_t *prev = NULL;
+
     
     // Find prev to current head to handle circular cases correct (or iterate)
     // Actually, simple traversal:

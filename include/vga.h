@@ -54,4 +54,7 @@ static inline uint8_t vga_color(enum vga_color fg, enum vga_color bg) {
     return fg | bg << 4;
 }
 
+// Draw splash screen (text mode)
+void vga_draw_splash_text(void);
+
 #endif

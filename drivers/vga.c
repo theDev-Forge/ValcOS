@@ -101,3 +101,60 @@ void vga_print_color(const char* str, uint8_t color) {
     vga_print(str);
     vga_current_color = old_color;
 }
+
+void vga_draw_splash_text(void) {
+    vga_clear();
+    
+    // Simple ASCII Art Logo using colors
+    // Centered roughly
+    int start_y = 6;
+    int start_x = 22;
+    
+    const char *logo[] = {
+        "V     V    aaa    l       ccc    OOO    SSS ",
+        "V     V   a   a   l      c      O   O  S    ",
+        " V   V    aaaaa   l      c      O   O   SSS ",
+        "  V V     a   a   l      c      O   O      S",
+        "   V      a   a   lllll   ccc    OOO    SSS "
+    };
+    
+    uint8_t colors[] = {
+        VGA_COLOR_LIGHT_BLUE,
+        VGA_COLOR_WHITE,
+        VGA_COLOR_LIGHT_RED,
+        VGA_COLOR_YELLOW,
+        VGA_COLOR_LIGHT_GREEN
+    };
+    
+    for (int i = 0; i < 5; i++) {
+        const char *line = logo[i];
+        int col_idx = 0;
+        for (int j = 0; line[j] != 0; j++) {
+            // rudimentary coloring based on position approx
+            uint8_t c = VGA_COLOR_WHITE;
+            if (j < 8) c = colors[0];       // V
+            else if (j < 18) c = colors[1]; // a
+            else if (j < 26) c = colors[1]; // l
+            else if (j < 36) c = colors[2]; // c
+            else if (j < 44) c = colors[3]; // O
+            else c = colors[4];             // S
+            
+            // Draw direct to memory to avoid cursor move
+             uint16_t *terminal = (uint16_t*)0xB8000;
+             size_t index = (start_y + i) * VGA_WIDTH + (start_x + j);
+             terminal[index] = (uint16_t)line[j] | (uint16_t)(c << 8);
+        }
+    }
+    
+    // Draw "Booting..." below
+    const char *msg = "Initializing ValcOS...";
+    int msg_len = 22;
+    int msg_x = 40 - (msg_len/2);
+    int msg_y = 15;
+    
+    for(int k=0; k<msg_len; k++) {
+         uint16_t *terminal = (uint16_t*)0xB8000;
+         size_t index = msg_y * VGA_WIDTH + (msg_x + k);
+         terminal[index] = (uint16_t)msg[k] | (uint16_t)(VGA_COLOR_LIGHT_GREY << 8);
+    }
+}
