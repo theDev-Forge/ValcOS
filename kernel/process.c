@@ -191,3 +191,98 @@ void schedule(void) {
 void process_yield(void) {
     schedule();
 }
+
+void process_debug_list(void) {
+    vga_print("PID  | State\n");
+    vga_print("---- | -----\n");
+    
+    if (!ready_queue_head) return;
+    
+    process_t *curr = ready_queue_head;
+    do {
+        char pid_str[16];
+        uint32_t pid = curr->pid;
+        
+        int i = 0;
+        if (pid == 0) pid_str[i++] = '0';
+        else {
+            char temp[16]; int j=0;
+            while(pid>0) { temp[j++]='0'+(pid%10); pid/=10; }
+            while(j>0) pid_str[i++] = temp[--j];
+        }
+        pid_str[i] = '\0';
+        
+        vga_print(pid_str);
+        // Padding
+        for(int k=i; k<5; k++) vga_print(" ");
+        vga_print("| ");
+        if (curr->pid == 0) vga_print("Kernel");
+        else vga_print("User");
+        
+        // Indicate current
+        if (curr == current_process) vga_print(" (*)");
+        
+        vga_print("\n");
+        
+        curr = curr->next;
+    } while (curr != ready_queue_head && curr != NULL);
+}
+
+int process_kill(uint32_t pid) {
+    if (pid == 0) return 0; // Cannot kill kernel
+    if (!ready_queue_head) return 0;
+    
+    process_t *curr = ready_queue_head;
+    process_t *prev = NULL;
+    
+    // Find prev to current head to handle circular cases correct (or iterate)
+    // Actually, simple traversal:
+    // Since it's circular, we need to find the node BEFORE the target.
+    
+    // Safety check just in case
+    if (ready_queue_head->next == ready_queue_head) {
+        // Only one process (Kernel). Can't kill it.
+        if (ready_queue_head->pid == pid) return 0;
+        return 0; // Not found
+    }
+    
+    process_t *target = NULL;
+    process_t *target_prev = NULL;
+    
+    curr = ready_queue_head;
+    do {
+        if (curr->next->pid == pid) {
+            target_prev = curr;
+            target = curr->next;
+            break;
+        }
+        curr = curr->next;
+    } while (curr != ready_queue_head);
+    
+    if (target) {
+        // Unlink
+        target_prev->next = target->next;
+        
+        // Fix head/tail if needed
+        if (target == ready_queue_head) ready_queue_head = target->next;
+        if (target == ready_queue_tail) ready_queue_tail = target_prev;
+        
+        // Free Memory
+        // Free Stack (We allocated stack + PCB in one block logic or separate?)
+        // In create_user: stack is separate pages. 
+        // We really need to free the pages!
+        // But for now, let's just free the PCB structure. 
+        // NOTE: Memory leak here for stack/page directory. 
+        // Fixing memory leaks is a separate task.
+        kfree(target);
+        
+        // If we killed the running process, we MUST schedule immediately
+        if (target == current_process) {
+            schedule();
+            // We never return here if we switched away
+        }
+        return 1;
+    }
+    
+    return 0;
+}

@@ -5,6 +5,7 @@
 #include "fat12.h"
 #include "memory.h"
 #include "process.h"
+#include "pmm.h"
 
 #define CMD_BUFFER_SIZE 256
 
@@ -23,8 +24,46 @@ static void shell_execute_command(const char* cmd) {
         vga_print("  clear - Clear the screen\n");
         vga_print("  ls    - List files\n");
         vga_print("  cat   - Read file content\n");
+        vga_print("  ps    - List processes\n");
+        vga_print("  mem   - Show memory usage\n");
+        vga_print("  kill  - Kill process <pid>\n");
         vga_print("  about - Show OS information\n");
         vga_print("  echo  - Print text to screen\n\n");
+    }
+    else if (strcmp(cmd, "ps") == 0) {
+        vga_print("\n");
+        process_debug_list();
+        vga_print("\n");
+    }
+    else if (strcmp(cmd, "mem") == 0) {
+        uint32_t total, used;
+        pmm_get_stats(&total, &used);
+        vga_print("\nMemory Stats:\n");
+        vga_print("Total Blocks: ");
+        char buf[16];
+        int i=0; uint32_t n=total;
+        if(n==0) buf[i++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[i++]=t[--j]; } buf[i]=0;
+        vga_print(buf);
+        vga_print("\nUsed Blocks:  ");
+        i=0; n=used;
+        if(n==0) buf[i++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[i++]=t[--j]; } buf[i]=0;
+        vga_print(buf);
+        vga_print("\n\n");
+    }
+    else if (cmd[0] == 'k' && cmd[1] == 'i' && cmd[2] == 'l' && cmd[3] == 'l' && cmd[4] == ' ') {
+        const char *pid_str = cmd + 5;
+        // Simple Atoi
+        uint32_t pid = 0;
+        while (*pid_str >= '0' && *pid_str <= '9') {
+            pid = pid * 10 + (*pid_str - '0');
+            pid_str++;
+        }
+        
+        if (process_kill(pid)) {
+            vga_print("\nProcess Killed.\n\n");
+        } else {
+            vga_print("\nFailed to kill process (Not found or Kernel).\n\n");
+        }
     }
     else if (strcmp(cmd, "clear") == 0) {
         vga_clear();

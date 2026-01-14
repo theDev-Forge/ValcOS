@@ -18,6 +18,11 @@ extern process_t *current_process;
 void process_init(void);
 void process_create(void (*entry_point)(void));
 void process_create_user(void (*entry_point)(void));
+
+// Debug: List all processes
+void process_debug_list(void);
+// Kill a process by PID
+int process_kill(uint32_t pid);
 void schedule(void);
 void process_yield(void);
 

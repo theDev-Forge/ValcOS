@@ -54,3 +54,8 @@ void pmm_free_block(uint32_t addr) {
         }
     }
 }
+
+void pmm_get_stats(uint32_t *total, uint32_t *used) {
+    if (total) *total = total_blocks;
+    if (used) *used = used_blocks;
+}
