@@ -1,10 +1,11 @@
 #include "vga.h"
 #include "idt.h"
-#include "keyboard.h"
-#include "shell.h"
 #include "timer.h"
 #include "memory.h"
 #include "fat12.h"
+#include "process.h"
+#include "shell.h" // Keep shell.h for shell_init and shell_run
+#include "keyboard.h" // Keep keyboard.h for shell_init (which might use it)
 
 void kernel_main(void) {
     // Initialize VGA display
@@ -16,25 +17,21 @@ void kernel_main(void) {
     // Initialize timer
     init_timer(50);
     
-    // Enable interrupts (Required for Floppy/Timer)
-    __asm__ volatile("sti");
-    
     // Initialize memory
     memory_init();
     
-    // Initialize FAT12 (Requires interrupts)
+    // Initialize FAT12 (Ramdisk)
     fat12_init();
     fat12_list_directory();
     
-    // Initialize keyboard
-    keyboard_init();
+    // Initialize Multitasking
+    process_init();
     
-    // Initialize and run shell
+    // Enable interrupts (Starts Multitasking via Timer)
+    __asm__ volatile("sti");
+    
+    // Initialize and run shell (Main Task)
+    keyboard_init(); // Re-add keyboard_init as shell might need it
     shell_init();
     shell_run();
-    
-    // Infinite loop (should never reach here)
-    while (1) {
-        __asm__ volatile("hlt");
-    }
 }

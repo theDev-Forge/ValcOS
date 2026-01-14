@@ -22,12 +22,13 @@ INCLUDE_DIR = include
 # Source files
 BOOT_SRC = $(BOOT_DIR)/boot.asm
 KERNEL_ENTRY_SRC = $(KERNEL_DIR)/kernel_entry.asm
-KERNEL_SRC = $(KERNEL_DIR)/kernel.c $(KERNEL_DIR)/idt.c $(KERNEL_DIR)/shell.c $(KERNEL_DIR)/string.c $(KERNEL_DIR)/memory.c fs/fat12.c
+KERNEL_SRC = $(KERNEL_DIR)/kernel.c $(KERNEL_DIR)/idt.c $(KERNEL_DIR)/shell.c $(KERNEL_DIR)/string.c $(KERNEL_DIR)/memory.c $(KERNEL_DIR)/process.c fs/fat12.c
 DRIVER_SRC = $(DRIVERS_DIR)/vga.c $(DRIVERS_DIR)/keyboard.c $(DRIVERS_DIR)/timer.c
 
 # Object files
 BOOT_BIN = $(BUILD_DIR)/boot.bin
 KERNEL_ENTRY_OBJ = $(BUILD_DIR)/kernel_entry.o
+PROCESS_ASM_OBJ = $(BUILD_DIR)/process_asm.o
 KERNEL_OBJ = $(patsubst $(KERNEL_DIR)/%.c, $(BUILD_DIR)/%.o, $(KERNEL_SRC))
 KERNEL_OBJ := $(KERNEL_OBJ:fs/%.o=$(BUILD_DIR)/%.o) # Fix path for fs/fat12.c
 # Actually simpler: just let the pattern match handle it if I use VPATH or explicit rules.
@@ -36,7 +37,7 @@ KERNEL_OBJ := $(KERNEL_OBJ:fs/%.o=$(BUILD_DIR)/%.o) # Fix path for fs/fat12.c
 # Let's fix KERNEL_OBJ and DRIVER_OBJ definitions properly.
 
 # Explicit object lists
-KERNEL_OBJS = $(BUILD_DIR)/kernel.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/shell.o $(BUILD_DIR)/string.o $(BUILD_DIR)/memory.o $(BUILD_DIR)/fat12.o
+KERNEL_OBJS = $(BUILD_DIR)/kernel.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/shell.o $(BUILD_DIR)/string.o $(BUILD_DIR)/memory.o $(BUILD_DIR)/fat12.o $(BUILD_DIR)/process.o $(PROCESS_ASM_OBJ)
 DRIVER_OBJS = $(BUILD_DIR)/vga.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/timer.o
 
 # Output
@@ -65,10 +66,15 @@ $(KERNEL_BIN): $(KERNEL_ENTRY_OBJ) $(KERNEL_OBJS) $(DRIVER_OBJS)
 	@echo "Extracting binary..."
 	$(OBJCOPY) -O binary $(KERNEL_ELF) $(KERNEL_BIN)
 
-# Build kernel entry
-$(KERNEL_ENTRY_OBJ): $(KERNEL_ENTRY_SRC) | $(BUILD_DIR)
+# Assemble kernel entry
+$(KERNEL_ENTRY_OBJ): $(KERNEL_ENTRY_SRC)
 	@echo "Assembling kernel entry..."
-	$(ASM) $(ASM_FLAGS) $(KERNEL_ENTRY_SRC) -o $(KERNEL_ENTRY_OBJ)
+	nasm -f elf32 $< -o $@
+
+# Assemble process switcher
+$(PROCESS_ASM_OBJ): $(KERNEL_DIR)/process.asm
+	@echo "Assembling process context switch..."
+	nasm -f elf32 $< -o $@
 
 # Build kernel C files
 $(BUILD_DIR)/%.o: $(KERNEL_DIR)/%.c | $(BUILD_DIR)
