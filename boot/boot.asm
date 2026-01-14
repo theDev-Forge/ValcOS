@@ -1,6 +1,30 @@
 [BITS 16]
 [ORG 0x7C00]
 
+    jmp short start
+    nop
+
+    ; FAT12 BPB (BIOS Parameter Block)
+    oem_name db "ValcOS  "
+    bytes_per_sector dw 512
+    sectors_per_cluster db 1
+    reserved_sectors dw 200     ; Reserved for Bootloader + Kernel
+    fat_count db 2
+    root_entries dw 224
+    total_sectors dw 2880
+    media_descriptor db 0xF0
+    sectors_per_fat dw 9
+    sectors_per_track dw 18
+    head_count dw 2
+    hidden_sectors dd 0
+    total_sectors_big dd 0
+    drive_number db 0
+    reserved db 0
+    signature db 0x29
+    volume_id dd 0x12345678
+    volume_label db "VALCOS     "
+    file_system db "FAT12   "
+
 start:
     ; Set up segments
     xor ax, ax
@@ -22,7 +46,7 @@ start:
     mov dh, 0           ; Head 0
     mov dl, [boot_drive] ; Use saved boot drive
     mov cx, 0x0002      ; CH=0 (Cyl), CL=2 (Sector)
-    mov si, 100         ; Read 100 sectors
+    mov si, 600         ; Read 600 sectors (Kernel + FS) to Ramdisk
 
 read_loop:
     push cx
@@ -52,12 +76,14 @@ read_loop:
     pop dx
     pop cx
     
-    ; Print dot
-    mov ah, 0x0E
-    mov al, '.'
-    int 0x10
-    
-    add bx, 512         ; Next buffer
+    ; mov ah, 0x0E ; Debug dot
+    ; mov al, '.'
+    ; int 0x10
+
+    ; Increment ES by 32 (0x20) * 16 = 512 bytes
+    mov ax, es
+    add ax, 0x20
+    mov es, ax
     dec si              ; Decrement count
     jz read_done
     

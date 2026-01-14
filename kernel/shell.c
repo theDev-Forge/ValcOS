@@ -2,6 +2,8 @@
 #include "vga.h"
 #include "keyboard.h"
 #include "string.h"
+#include "fat12.h"
+#include "memory.h"
 
 #define CMD_BUFFER_SIZE 256
 
@@ -18,11 +20,36 @@ static void shell_execute_command(const char* cmd) {
         vga_print_color("\nAvailable commands:\n", vga_color(VGA_COLOR_YELLOW, VGA_COLOR_BLACK));
         vga_print("  help  - Display this help message\n");
         vga_print("  clear - Clear the screen\n");
+        vga_print("  ls    - List files\n");
+        vga_print("  cat   - Read file content\n");
         vga_print("  about - Show OS information\n");
         vga_print("  echo  - Print text to screen\n\n");
     }
     else if (strcmp(cmd, "clear") == 0) {
         vga_clear();
+    }
+    else if (strcmp(cmd, "ls") == 0) {
+        vga_print("\n");
+        fat12_list_directory();
+        vga_print("\n");
+    }
+    else if (cmd[0] == 'c' && cmd[1] == 'a' && cmd[2] == 't' && cmd[3] == ' ') {
+        const char *filename = cmd + 4;
+        uint8_t *buf = (uint8_t*)kmalloc(4096);
+        if(buf) {
+            int bytes = fat12_read_file(filename, buf);
+            if (bytes > 0) {
+                vga_print("\n");
+                if (bytes < 4096) buf[bytes] = 0; else buf[4095] = 0;
+                vga_print((char*)buf);
+                vga_print("\n\n");
+            } else {
+                 vga_print("\nFile not found.\n\n");
+            }
+            kfree(buf);
+        } else {
+            vga_print("\nMemory error.\n\n");
+        }
     }
     else if (strcmp(cmd, "about") == 0) {
         vga_print("\n");

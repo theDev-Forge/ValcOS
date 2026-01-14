@@ -41,6 +41,8 @@ _timer_handler_asm:
     popa
     iretd
 
+
+
 section .bss
     align 16
 kernel_stack_bottom:

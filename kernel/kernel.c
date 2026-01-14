@@ -4,6 +4,7 @@
 #include "shell.h"
 #include "timer.h"
 #include "memory.h"
+#include "fat12.h"
 
 void kernel_main(void) {
     // Initialize VGA display
@@ -15,14 +16,18 @@ void kernel_main(void) {
     // Initialize timer
     init_timer(50);
     
+    // Enable interrupts (Required for Floppy/Timer)
+    __asm__ volatile("sti");
+    
     // Initialize memory
     memory_init();
     
+    // Initialize FAT12 (Requires interrupts)
+    fat12_init();
+    fat12_list_directory();
+    
     // Initialize keyboard
     keyboard_init();
-    
-    // Enable interrupts
-    __asm__ volatile("sti");
     
     // Initialize and run shell
     shell_init();
