@@ -60,6 +60,9 @@ void keyboard_handler(void) {
         
         // Display only printable or newline/backspace
         // Don't echo arrow keys directly to screen!
+        // Display only printable or newline/backspace
+        // Don't echo arrow keys directly to screen!
+        /*
         if (ascii >= 0x20 || ascii == '\n' || ascii == '\b') {
              if (ascii == '\b') {
                 vga_putchar('\b');
@@ -69,6 +72,7 @@ void keyboard_handler(void) {
                 vga_putchar(ascii);
             }
         }
+        */
     }
     
     // Send EOI (End of Interrupt) to PIC

@@ -247,6 +247,7 @@ void shell_run(void) {
         else if (c == '\b') {
             if (cmd_pos > 0) {
                 cmd_pos--;
+                vga_putchar('\b'); // Visual backspace
             }
         }
         else if (c == 0x11) { // UP Arrow
@@ -272,6 +273,7 @@ void shell_run(void) {
         }
         else if (c >= 0x20 && cmd_pos < CMD_BUFFER_SIZE - 1) { // Standard printable
             cmd_buffer[cmd_pos++] = c;
+            vga_putchar(c); // Echo character
         }
     }
 }
