@@ -5,6 +5,8 @@
 #include "syscall.h"
 #include "timer.h"
 #include "memory.h"
+#include "pmm.h"
+#include "vmm.h"
 #include "fat12.h"
 #include "process.h"
 #include "shell.h" // Keep shell.h for shell_init and shell_run
@@ -31,6 +33,12 @@ void kernel_main(void) {
     
     // Initialize memory
     memory_init();
+    
+    // Initialize PMM
+    pmm_init(128*1024*1024);
+    
+    // Initialize VMM (Enable Paging)
+    vmm_init();
     
     // Initialize FAT12 (Ramdisk)
     fat12_init();

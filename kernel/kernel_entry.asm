@@ -67,6 +67,39 @@ _syscall_handler_asm:
     popa                ; Restore registers (EAX restored to original value, so no return val support yet)
     iretd
 
+; Page Fault Handler (INT 14)
+global _isr14
+extern _page_fault_handler
+_isr14:
+    pusha
+    mov eax, [esp + 32] ; Retrieve Error Code (below pusha)
+    push eax            ; Push as argument
+    call _page_fault_handler
+    add esp, 4          ; Pop argument
+    popa
+    add esp, 4          ; Pop Error Code
+    iretd
+
+; GPF Handler (INT 13)
+global _isr13
+extern _gpf_handler
+_isr13:
+    pusha
+    call _gpf_handler
+    popa
+    add esp, 4
+    iretd
+
+; Double Fault Handler (INT 8)
+global _isr8
+extern _double_fault_handler
+_isr8:
+    pusha
+    call _double_fault_handler
+    popa
+    add esp, 4
+    iretd
+
 
 
 section .bss

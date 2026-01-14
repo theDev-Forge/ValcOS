@@ -24,8 +24,7 @@ typedef struct {
 void memory_init(void);
 
 // Physical Memory Manager
-void *pmm_alloc_block(void);
-void pmm_free_block(void *ptr);
+// PMM Functions handled in pmm.h
 
 // Heap Allocator
 void *kmalloc(size_t size);

@@ -7,6 +7,9 @@ struct idt_ptr idtp;
 
 // External assembly function to load IDT
 extern void idt_load(uint32_t);
+extern void isr14(void);
+extern void isr8(void);
+extern void isr13(void);
 
 void idt_set_gate(uint8_t num, uint32_t base, uint16_t selector, uint8_t flags) {
     idt[num].base_low = base & 0xFFFF;
@@ -44,6 +47,15 @@ void idt_init(void) {
     // Mask all IRQs except IRQ0 (timer) and IRQ1 (keyboard)
     outb(0x21, 0xFC);
     outb(0xA1, 0xFF);
+    
+    // Register Page Fault Handler (INT 14)
+    idt_set_gate(14, (uint32_t)isr14, 0x08, 0x8E);
+
+    // Register Double Fault (INT 8)
+    idt_set_gate(8, (uint32_t)isr8, 0x08, 0x8E);
+
+    // Register GPF (INT 13)
+    idt_set_gate(13, (uint32_t)isr13, 0x08, 0x8E);
     
     // Load the IDT
     idt_load((uint32_t)&idtp);

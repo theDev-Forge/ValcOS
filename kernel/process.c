@@ -2,6 +2,9 @@
 #include "memory.h"
 #include "vga.h"
 #include "tss.h"
+#include "vmm.h"
+#include "pmm.h"
+#include "string.h"
 
 process_t *current_process = NULL;
 process_t *ready_queue_head = NULL;
@@ -19,6 +22,7 @@ void process_init(void) {
     process_t *kernel_proc = (process_t*)kmalloc(sizeof(process_t));
     kernel_proc->pid = 0;
     kernel_proc->esp = 0; // Will be set by switch_to_task
+    kernel_proc->cr3 = vmm_get_kernel_directory();
     kernel_proc->next = NULL;
     
     current_process = kernel_proc;
@@ -30,6 +34,7 @@ void process_create(void (*entry_point)(void)) {
     // 1. Allocate PCB
     process_t *proc = (process_t*)kmalloc(sizeof(process_t));
     proc->pid = next_pid++;
+    proc->cr3 = vmm_get_kernel_directory();
     proc->next = NULL;
     
     // 2. Allocate Stack (4KB)
@@ -86,6 +91,7 @@ void process_create_user(void (*entry_point)(void)) {
     // 1. Allocate PCB
     process_t *proc = (process_t*)kmalloc(sizeof(process_t));
     proc->pid = next_pid++;
+    proc->cr3 = vmm_get_kernel_directory();
     proc->next = NULL;
 
     // 2. Allocate Kernel Stack (4KB)
@@ -94,17 +100,31 @@ void process_create_user(void (*entry_point)(void)) {
     
     proc->kernel_stack_top = (uint32_t)ktop; // Save Top for TSS
 
-    // 3. Allocate User Stack (4KB)
-    uint32_t *ustack = (uint32_t*)kmalloc(4096);
-    uint32_t user_esp = (uint32_t)(ustack + 1024);
+    // 3. Allocate User Pages (Code & Stack)
+    uint32_t phys_code = pmm_alloc_block();
+    uint32_t phys_stack = pmm_alloc_block();
+    
+    // Map them at User Virtual Addresses with USER permissions
+    // Code: 0x400000
+    // Stack: 0x401000
+    // Flags: 0x07 (Present | RW | User)
+    vmm_map_page(phys_code, 0x400000, 0x07);
+    vmm_map_page(phys_stack, 0x401000, 0x07);
+    
+    // Copy Code to 0x400000
+    // entry_point is the source buffer address here
+    memcpy((void*)0x400000, (void*)entry_point, 4096);
 
     // 4. Setup Trap Frame for IRET (User Mode Switch)
     // Stack: [SS] [ESP] [EFLAGS] [CS] [EIP]
+    // Stack grows down from 0x402000 (0x401000 + 4096)
+    uint32_t user_esp = 0x402000;
+
     *(--ktop) = 0x23;                   // User SS (Ring 3 Data)
     *(--ktop) = user_esp;               // User ESP
     *(--ktop) = 0x202;                  // User EFLAGS (IE=1)
     *(--ktop) = 0x1B;                   // User CS (Ring 3 Code)
-    *(--ktop) = (uint32_t)entry_point;  // User EIP
+    *(--ktop) = 0x400000;               // User EIP (Start of Code)
 
     // 5. Setup Stack Frame for switch_to_task
     // RET will jump to enter_user_mode (which does IRET)
@@ -145,6 +165,12 @@ void schedule(void) {
     if (next != current_process) {
         // Update TSS to use the new process's kernel stack for interrupts
         set_kernel_stack(next->kernel_stack_top);
+        
+        // Switch Page Directory
+        if (next->cr3) {
+            vmm_switch_directory(next->cr3);
+        }
+        
         switch_to_task(next);
     }
 }
