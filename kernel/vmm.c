@@ -60,6 +60,11 @@ void vmm_map_page(uint32_t phys, uint32_t virt, uint32_t flags) {
         kernel_directory[pd_index] = new_table_phys | PTE_PRESENT | PTE_RW | (flags & PTE_USER); 
     } else {
         // Table exists
+        // If the new page requires USER permissions, we must ensure the PDE also has USER permissions.
+        if (flags & PTE_USER) {
+            kernel_directory[pd_index] |= PTE_USER;
+        }
+        
         // Extract Physical Address
         uint32_t table_phys = pde & 0xFFFFF000;
         // Assume Phys=Virt for now
