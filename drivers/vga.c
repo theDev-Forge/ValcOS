@@ -1,10 +1,20 @@
 #include "vga.h"
 #include "string.h"
+#include "idt.h"
 
 static uint16_t* vga_buffer = (uint16_t*)0xB8000;
 static size_t vga_row = 0;
 static size_t vga_column = 0;
 static uint8_t vga_current_color = 0;
+
+static void vga_update_cursor(int x, int y) {
+    uint16_t pos = y * VGA_WIDTH + x;
+    
+    outb(0x3D4, 0x0F);
+    outb(0x3D5, (uint8_t)(pos & 0xFF));
+    outb(0x3D4, 0x0E);
+    outb(0x3D5, (uint8_t)((pos >> 8) & 0xFF));
+}
 
 void vga_init(void) {
     vga_current_color = vga_color(VGA_COLOR_LIGHT_GREY, VGA_COLOR_BLACK);
@@ -20,6 +30,7 @@ void vga_clear(void) {
     }
     vga_row = 0;
     vga_column = 0;
+    vga_update_cursor(0, 0);
 }
 
 void vga_set_color(uint8_t foreground, uint8_t background) {
@@ -74,6 +85,8 @@ void vga_putchar(char c) {
     if (vga_row >= VGA_HEIGHT) {
         vga_scroll();
     }
+    
+    vga_update_cursor(vga_column, vga_row);
 }
 
 void vga_print(const char* str) {
