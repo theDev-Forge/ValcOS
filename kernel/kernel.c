@@ -14,6 +14,9 @@
 #include "netdevice.h"
 #include "socket.h"
 #include "loopback.h"
+#include "fs.h"
+#include "blkdev.h"
+#include "device.h"
 #include "process.h"
 #include "pmm.h"
 #include "vmm.h"
@@ -77,6 +80,15 @@ void kernel_main(void) {
     netdev_init();
     socket_init();
     loopback_init();
+    
+    // Initialize VFS
+    vfs_init();
+    
+    // Initialize block device subsystem
+    blkdev_init();
+    
+    // Initialize device subsystem
+    device_init();
     
     // Initialize keyboard
     vga_print("Initializing Keyboard...\n");

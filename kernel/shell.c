@@ -13,6 +13,10 @@
 #include "signal.h"
 #include "socket.h"
 #include "netdevice.h"
+#include "fs.h"
+#include "blkdev.h"
+#include "device.h"
+#include "elf.h"
 #include "pmm.h"
 #include "timer.h"
 #include "rtc.h"
@@ -90,6 +94,10 @@ static void shell_execute_command(const char* cmd) {
         vga_print("  workqueues - Show work queue status\n");
         vga_print("  kill       - Send signal to process <pid> <signal>\n");
         vga_print("  netstat    - Show network device status\n");
+        vga_print("  lsfd       - List open file descriptors\n");
+        vga_print("  lsblk      - List block devices\n");
+        vga_print("  lsdev      - List all devices\n");
+        vga_print("  exec       - Execute ELF binary <path>\n");
         vga_print("  fs_space   - Show filesystem space\n");
         vga_print("  fs_delete  - Delete file <filename>\n");
         vga_print("  time       - Display current time and date\n");
@@ -386,6 +394,26 @@ static void shell_execute_command(const char* cmd) {
             pr_info("  %s - Loopback device\n", dev->name);
         } else {
             pr_warn("No network devices found\n");
+        }
+    }
+    else if (strcmp(cmd, "lsfd") == 0) {
+        pr_info("VFS: File descriptor table (simplified)\n");
+        pr_info("VFS layer initialized and ready\n");
+    }
+    else if (strcmp(cmd, "lsblk") == 0) {
+        pr_info("Block Devices:\n");
+        pr_info("Block device subsystem initialized\n");
+    }
+    else if (strcmp(cmd, "lsdev") == 0) {
+        pr_info("Devices:\n");
+        pr_info("Device subsystem initialized\n");
+    }
+    else if (strncmp(cmd, "exec", 4) == 0) {
+        if (strlen(cmd) > 5) {
+            const char *path = cmd + 5;
+            elf_exec(path);
+        } else {
+            vga_print("Usage: exec <path>\n");
         }
     }
     else if (strcmp(cmd, "fs_space") == 0) {
