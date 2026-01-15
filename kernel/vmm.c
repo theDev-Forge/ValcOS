@@ -18,7 +18,6 @@
 #define TABLES_PER_DIR  1024
 
 // Kernel Page Directory (pointers to Page Tables)
-// We will allocate this using PMM to ensure page alignment (4KB)
 static uint32_t *kernel_directory = 0;
 
 uint32_t vmm_get_kernel_directory(void) {
@@ -35,7 +34,6 @@ void vmm_map_page(uint32_t phys, uint32_t virt, uint32_t flags) {
     uint32_t pt_index = (virt >> 12) & 0x03FF;
     
     // 2. Check if Page Table exists
-    // The PDE contains physical address of PT in top 20 bits
     uint32_t pde = kernel_directory[pd_index];
     
     uint32_t *table; // Virtual address of the table
@@ -55,19 +53,15 @@ void vmm_map_page(uint32_t phys, uint32_t virt, uint32_t flags) {
         memset((uint8_t*)table, 0, 4096);
         
         // Add Entry to Directory
-        // Present | RW | User (if needed) -> Flags should include PTE_PRESENT | PTE_RW
-        // Default table flags: present, rw
         kernel_directory[pd_index] = new_table_phys | PTE_PRESENT | PTE_RW | (flags & PTE_USER); 
     } else {
         // Table exists
-        // If the new page requires USER permissions, we must ensure the PDE also has USER permissions.
         if (flags & PTE_USER) {
             kernel_directory[pd_index] |= PTE_USER;
         }
         
         // Extract Physical Address
         uint32_t table_phys = pde & 0xFFFFF000;
-        // Assume Phys=Virt for now
         table = (uint32_t*)table_phys; 
     }
     
@@ -76,6 +70,36 @@ void vmm_map_page(uint32_t phys, uint32_t virt, uint32_t flags) {
     
     // 4. Invalidate TLB
     __asm__ volatile("invlpg (%0)" :: "r" (virt) : "memory");
+}
+
+void vmm_unmap_page(uint32_t virt) {
+    uint32_t pd_index = virt >> 22;
+    uint32_t pt_index = (virt >> 12) & 0x03FF;
+    
+    uint32_t pde = kernel_directory[pd_index];
+    if (!(pde & PTE_PRESENT)) return; // Table doesn't exist
+    
+    uint32_t *table = (uint32_t*)(pde & 0xFFFFF000);
+    table[pt_index] = 0; // Clear entry
+    
+    // Invalidate TLB
+    __asm__ volatile("invlpg (%0)" :: "r" (virt) : "memory");
+}
+
+uint32_t vmm_get_physical_address(uint32_t virt) {
+    uint32_t pd_index = virt >> 22;
+    uint32_t pt_index = (virt >> 12) & 0x03FF;
+    uint32_t offset = virt & 0xFFF;
+    
+    uint32_t pde = kernel_directory[pd_index];
+    if (!(pde & PTE_PRESENT)) return 0;
+    
+    uint32_t *table = (uint32_t*)(pde & 0xFFFFF000);
+    uint32_t pte = table[pt_index];
+    
+    if (!(pte & PTE_PRESENT)) return 0;
+    
+    return (pte & 0xFFFFF000) | offset;
 }
 
 void vmm_enable_paging(void) {
@@ -102,14 +126,10 @@ void vmm_init(void) {
     kernel_directory = (uint32_t*)dir_phys;
     memset((uint8_t*)kernel_directory, 0, 4096);
     
-    // 2. Identity Map Kernel (0 - 4MB)
-    // Actually, let's map 0 - 8MB to be safe for Heap growth
-    // 0xB8000 (VGA) is inside this range.
-    // 0x100000 (Kernel Start) is inside.
-    
-    // Map 0 -> 0 to 8MB -> 8MB
+    // 2. Identity Map Kernel (0 - 8MB for kernel + heap area)
+    // The heap in memory.c is at 2MB, so we need to map at least up to 3MB
     for (uint32_t addr = 0; addr < 0x800000; addr += PAGE_SIZE) {
-        vmm_map_page(addr, addr, PTE_PRESENT | PTE_RW); // Kernel pages
+        vmm_map_page(addr, addr, PTE_PRESENT | PTE_RW);
     }
     
     // 3. Load CR3
@@ -121,34 +141,68 @@ void vmm_init(void) {
     vga_print("Paging Enabled!\n");
 }
 
+uint32_t vmm_clone_directory(void) {
+    // Allocate new directory
+    uint32_t new_dir_phys = pmm_alloc_block();
+    if (!new_dir_phys) return 0;
+    
+    uint32_t *new_dir = (uint32_t*)new_dir_phys;
+    memset((uint8_t*)new_dir, 0, 4096);
+    
+    // Copy kernel mappings (first 768 entries for lower 3GB)
+    // User space would be entries 0-767, kernel is 768-1023
+    for (int i = 0; i < 768; i++) {
+        new_dir[i] = kernel_directory[i];
+    }
+    
+    // Share kernel space (768-1023)
+    for (int i = 768; i < 1024; i++) {
+        new_dir[i] = kernel_directory[i];
+    }
+    
+    return new_dir_phys;
+}
+
 void page_fault_handler(uint32_t err_code) {
     uint32_t fault_addr;
     __asm__ volatile("mov %%cr2, %0" : "=r" (fault_addr));
     
-    vga_print("\n[PAGE FAULT] ");
+    vga_print_color("\n========== PAGE FAULT ==========\n", 0x0C);
     
     const char *digits = "0123456789ABCDEF";
     
-    vga_print("Addr: 0x");
+    vga_print("Faulting Address: 0x");
     for (int i = 28; i >= 0; i -= 4) {
         char c = digits[(fault_addr >> i) & 0xF];
         char str[2] = {c, '\0'};
         vga_print(str);
     }
+    vga_print("\n");
     
-    vga_print(" Err: 0x");
+    vga_print("Error Code: 0x");
     for (int i = 28; i >= 0; i -= 4) {
         char c = digits[(err_code >> i) & 0xF];
         char str[2] = {c, '\0'};
         vga_print(str);
     }
+    vga_print("\n");
     
-    vga_print("\nFlags: ");
-    if (err_code & 1) vga_print("[P] "); else vga_print("[NP] ");
-    if (err_code & 2) vga_print("[W] "); else vga_print("[R] ");
-    if (err_code & 4) vga_print("[U] "); else vga_print("[K] ");
+    vga_print("\nError Details:\n");
+    vga_print("  ");
+    if (err_code & 1) vga_print("[PROTECTION VIOLATION] "); 
+    else vga_print("[NON-PRESENT PAGE] ");
     
-    vga_print("\nSystem Halted.\n");
+    if (err_code & 2) vga_print("[WRITE] "); 
+    else vga_print("[READ] ");
+    
+    if (err_code & 4) vga_print("[USER MODE] "); 
+    else vga_print("[KERNEL MODE] ");
+    
+    if (err_code & 8) vga_print("[RESERVED BITS] ");
+    if (err_code & 16) vga_print("[INSTRUCTION FETCH] ");
+    
+    vga_print("\n================================\n");
+    vga_print("System Halted.\n");
     
     while(1) __asm__ volatile("hlt");
 }
