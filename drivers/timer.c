@@ -2,6 +2,7 @@
 #include "idt.h"
 #include "vga.h"
 #include "process.h"
+#include "ktimer.h"
 
 // Timer state
 static uint32_t tick = 0;
@@ -40,6 +41,9 @@ void timer_handler(void) {
         }
     }
 
+    // Run kernel timers
+    ktimer_run();
+    
     // Schedule every 10 ticks (approx 200ms at 50Hz, or 10ms at 1000Hz)
     if (tick % 10 == 0) {
         schedule();

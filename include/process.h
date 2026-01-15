@@ -4,6 +4,9 @@
 #include <stdint.h>
 #include "list.h"
 
+// Forward declaration
+typedef void (*sighandler_t)(int);
+
 // Process states
 typedef enum {
     PROCESS_READY,
@@ -25,6 +28,10 @@ typedef struct process {
     uint32_t time_slice;        // Remaining ticks in current slice
     uint32_t total_runtime;     // Total ticks executed
     char name[32];              // Process name for debugging
+    
+    // Signal handling
+    uint32_t pending_signals;   // Bitmap of pending signals
+    sighandler_t signal_handlers[32];  // Signal handlers
 } process_t;
 
 // Global pointer to current process
@@ -34,6 +41,9 @@ extern process_t *current_process;
 void process_init(void);
 void process_create(void (*entry_point)(void));
 void process_create_user(void (*entry_point)(void));
+
+// Find process by PID
+process_t *process_find_by_pid(uint32_t pid);
 
 // Debug: List all processes
 void process_debug_list(void);

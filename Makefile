@@ -22,15 +22,15 @@ APPS_DIR = apps
 # Source files
 BOOT_SRC = $(BOOT_DIR)/boot.asm
 KERNEL_ENTRY_SRC = $(KERNEL_DIR)/kernel_entry.asm
-KERNEL_SRC = $(KERNEL_DIR)/kernel.c $(KERNEL_DIR)/idt.c $(KERNEL_DIR)/shell.c $(KERNEL_DIR)/string.c $(KERNEL_DIR)/memory.c $(KERNEL_DIR)/slab.c $(KERNEL_DIR)/printk.c $(KERNEL_DIR)/process.c $(KERNEL_DIR)/gdt.c $(KERNEL_DIR)/tss.c $(KERNEL_DIR)/syscall.c $(KERNEL_DIR)/pmm.c $(KERNEL_DIR)/vmm.c fs/fat12.c
-DRIVER_SRC = $(DRIVERS_DIR)/vga.c $(DRIVERS_DIR)/keyboard.c $(KERNEL_DIR)/timer.c $(DRIVERS_DIR)/rtc.c
+KERNEL_SRC = $(KERNEL_DIR)/kernel.c $(KERNEL_DIR)/idt.c $(KERNEL_DIR)/shell.c $(KERNEL_DIR)/string.c $(KERNEL_DIR)/memory.c $(KERNEL_DIR)/slab.c $(KERNEL_DIR)/printk.c $(KERNEL_DIR)/ktimer.c $(KERNEL_DIR)/workqueue.c $(KERNEL_DIR)/signal.c $(KERNEL_DIR)/netdevice.c $(KERNEL_DIR)/skbuff.c $(KERNEL_DIR)/socket.c $(KERNEL_DIR)/process.c $(KERNEL_DIR)/gdt.c $(KERNEL_DIR)/tss.c $(KERNEL_DIR)/syscall.c $(KERNEL_DIR)/pmm.c $(KERNEL_DIR)/vmm.c fs/fat12.c
+DRIVER_SRC = $(DRIVERS_DIR)/vga.c $(DRIVERS_DIR)/keyboard.c $(KERNEL_DIR)/timer.c $(DRIVERS_DIR)/rtc.c drivers/net/loopback.c
 
 # Object files
 BOOT_BIN = $(BUILD_DIR)/boot.bin
 KERNEL_ENTRY_OBJ = $(BUILD_DIR)/kernel_entry.o
 PROCESS_ASM_OBJ = $(BUILD_DIR)/process_asm.o
-KERNEL_OBJS = $(BUILD_DIR)/kernel.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/shell.o $(BUILD_DIR)/string.o $(BUILD_DIR)/memory.o $(BUILD_DIR)/slab.o $(BUILD_DIR)/printk.o $(BUILD_DIR)/fat12.o $(BUILD_DIR)/process.o $(PROCESS_ASM_OBJ) $(BUILD_DIR)/gdt.o $(BUILD_DIR)/tss.o $(BUILD_DIR)/syscall.o $(BUILD_DIR)/pmm.o $(BUILD_DIR)/vmm.o
-DRIVER_OBJS = $(BUILD_DIR)/vga.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/timer.o $(BUILD_DIR)/vga_gfx.o $(BUILD_DIR)/rtc.o
+KERNEL_OBJS = $(BUILD_DIR)/kernel.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/shell.o $(BUILD_DIR)/string.o $(BUILD_DIR)/memory.o $(BUILD_DIR)/slab.o $(BUILD_DIR)/printk.o $(BUILD_DIR)/ktimer.o $(BUILD_DIR)/workqueue.o $(BUILD_DIR)/signal.o $(BUILD_DIR)/netdevice.o $(BUILD_DIR)/skbuff.o $(BUILD_DIR)/socket.o $(BUILD_DIR)/fat12.o $(BUILD_DIR)/process.o $(PROCESS_ASM_OBJ) $(BUILD_DIR)/gdt.o $(BUILD_DIR)/tss.o $(BUILD_DIR)/syscall.o $(BUILD_DIR)/pmm.o $(BUILD_DIR)/vmm.o
+DRIVER_OBJS = $(BUILD_DIR)/vga.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/timer.o $(BUILD_DIR)/vga_gfx.o $(BUILD_DIR)/rtc.o $(BUILD_DIR)/loopback.o
 
 # Output
 KERNEL_ELF = $(BUILD_DIR)/kernel.elf
@@ -92,6 +92,11 @@ $(BUILD_DIR)/%.o: fs/%.c | $(BUILD_DIR)
 
 # Build driver C files
 $(BUILD_DIR)/%.o: $(DRIVERS_DIR)/%.c | $(BUILD_DIR)
+	@echo "Compiling $<..."
+	$(CC) $(C_FLAGS) -I$(INCLUDE_DIR) $< -o $@
+
+# Build drivers/net C files
+$(BUILD_DIR)/%.o: drivers/net/%.c | $(BUILD_DIR)
 	@echo "Compiling $<..."
 	$(CC) $(C_FLAGS) -I$(INCLUDE_DIR) $< -o $@
 

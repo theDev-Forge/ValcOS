@@ -1,5 +1,9 @@
 #include "idt.h"
 #include "string.h"
+#include "vga.h"
+#include "keyboard.h"
+#include "process.h"
+#include "ktimer.h"
 
 // IDT with 256 entries
 struct idt_entry idt[256];

@@ -2,6 +2,7 @@
 #include "memory.h"
 #include "slab.h"
 #include "printk.h"
+#include "signal.h"
 #include "tss.h"
 #include "vmm.h"
 #include "pmm.h"
@@ -49,10 +50,16 @@ void process_init(void) {
     
     // Initialize new fields
     kernel_proc->state = PROCESS_RUNNING;
-    kernel_proc->priority = 255; // Kernel has highest priority
-    kernel_proc->time_slice = calculate_time_slice(255);
+    kernel_proc->priority = 128;
+    kernel_proc->time_slice = 0;
     kernel_proc->total_runtime = 0;
     strcpy(kernel_proc->name, "kernel");
+    
+    // Initialize signal fields
+    kernel_proc->pending_signals = 0;
+    for (int i = 0; i < 32; i++) {
+        kernel_proc->signal_handlers[i] = (sighandler_t)0;  // SIG_DFL
+    }
     
     // Initialize list node and add to ready queue
     INIT_LIST_HEAD(&kernel_proc->list);
@@ -69,10 +76,16 @@ void process_create(void (*entry_point)(void)) {
     
     // Initialize new fields
     proc->state = PROCESS_READY;
-    proc->priority = DEFAULT_PRIORITY;
-    proc->time_slice = calculate_time_slice(DEFAULT_PRIORITY);
+    proc->priority = 100;
+    proc->time_slice = calculate_time_slice(proc->priority);
     proc->total_runtime = 0;
-    strcpy(proc->name, "process");
+    strcpy(proc->name, "kernel_task");
+    
+    // Initialize signal fields
+    proc->pending_signals = 0;
+    for (int i = 0; i < 32; i++) {
+        proc->signal_handlers[i] = (sighandler_t)0;  // SIG_DFL
+    }
     
     uint32_t *stack = (uint32_t*)kmalloc(4096);
     uint32_t *top = stack + 1024;
@@ -235,6 +248,9 @@ void schedule(void) {
             vmm_switch_directory(next->cr3);
         }
         
+        // Deliver pending signals before switching
+        do_signal();
+        
         // Context switch
         switch_to_task(next);
     } else {
@@ -266,6 +282,16 @@ void process_debug_list(void) {
         if (proc == current_process) pr_info(" (*)");
         pr_info("\n");
     }
+}
+
+process_t *process_find_by_pid(uint32_t pid) {
+    process_t *proc;
+    list_for_each_entry(proc, &ready_queue, list) {
+        if (proc->pid == pid) {
+            return proc;
+        }
+    }
+    return NULL;
 }
 
 int process_kill(uint32_t pid) {

@@ -8,6 +8,11 @@
 #include "list.h"
 #include "slab.h"
 #include "printk.h"
+#include "ktimer.h"
+#include "workqueue.h"
+#include "signal.h"
+#include "socket.h"
+#include "netdevice.h"
 #include "pmm.h"
 #include "timer.h"
 #include "rtc.h"
@@ -81,6 +86,10 @@ static void shell_execute_command(const char* cmd) {
         vga_print("  slabinfo   - Show slab allocator statistics\n");
         vga_print("  loglevel   - Set kernel log level <0-7>\n");
         vga_print("  test_log   - Test kernel logging\n");
+        vga_print("  ktimers    - Show active kernel timers\n");
+        vga_print("  workqueues - Show work queue status\n");
+        vga_print("  kill       - Send signal to process <pid> <signal>\n");
+        vga_print("  netstat    - Show network device status\n");
         vga_print("  fs_space   - Show filesystem space\n");
         vga_print("  fs_delete  - Delete file <filename>\n");
         vga_print("  time       - Display current time and date\n");
@@ -317,6 +326,67 @@ static void shell_execute_command(const char* cmd) {
         pr_notice("Notice message\n");
         pr_info("Info message\n");
         pr_debug("Debug message\n");
+    }
+    else if (strcmp(cmd, "ktimers") == 0) {
+        int count = ktimer_get_count();
+        pr_info("Active kernel timers: %d\n", count);
+        pr_info("Current jiffies: %lu\n", jiffies);
+        pr_info("Uptime: %u ms\n", timer_get_uptime_ms());
+    }
+    else if (strcmp(cmd, "workqueues") == 0) {
+        int pending = workqueue_get_pending_count();
+        pr_info("Pending work items: %d\n", pending);
+    }
+    else if (strncmp(cmd, "kill", 4) == 0) {
+        // Parse: kill <pid> <signal>
+        if (strlen(cmd) > 5) {
+            int pid = 0, sig = SIGTERM;
+            int parsed = 0;
+            
+            // Simple parsing
+            const char *p = cmd + 5;
+            while (*p == ' ') p++;
+            
+            // Parse PID
+            while (*p >= '0' && *p <= '9') {
+                pid = pid * 10 + (*p - '0');
+                p++;
+                parsed = 1;
+            }
+            
+            // Parse signal (optional)
+            while (*p == ' ') p++;
+            if (*p >= '0' && *p <= '9') {
+                sig = 0;
+                while (*p >= '0' && *p <= '9') {
+                    sig = sig * 10 + (*p - '0');
+                    p++;
+                }
+            }
+            
+            if (parsed) {
+                int result = sys_kill(pid, sig);
+                if (result == 0) {
+                    pr_info("Signal %d sent to process %d\n", sig, pid);
+                } else {
+                    pr_err("Failed to send signal (process not found)\n");
+                }
+            } else {
+                vga_print("Usage: kill <pid> [signal]\n");
+            }
+        } else {
+            vga_print("Usage: kill <pid> [signal]\n");
+            vga_print("Default signal is SIGTERM (15)\n");
+        }
+    }
+    else if (strcmp(cmd, "netstat") == 0) {
+        pr_info("Network Devices:\n");
+        struct net_device *dev = netdev_find("lo");
+        if (dev) {
+            pr_info("  %s - Loopback device\n", dev->name);
+        } else {
+            pr_warn("No network devices found\n");
+        }
     }
     else if (strcmp(cmd, "fs_space") == 0) {
         uint32_t free_space = fat12_get_free_space();
