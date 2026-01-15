@@ -13,6 +13,9 @@ int strcmp(const char* str1, const char* str2);
 // String copy
 char* strcpy(char* dest, const char* src);
 
+// String concatenate
+char* strcat(char* dest, const char* src);
+
 // Memory set
 void* memset(void* ptr, int value, size_t num);
 
@@ -20,3 +23,4 @@ void* memset(void* ptr, int value, size_t num);
 void* memcpy(void* dest, const void* src, size_t num);
 
 #endif
+

@@ -21,6 +21,10 @@
 // Total clusters available (FAT12 supports up to 4084 clusters)
 #define TOTAL_CLUSTERS 4080
 
+// Current Working Directory tracking
+static uint16_t current_dir_cluster = 0; // 0 = root directory
+static char current_path[256] = "/";
+
 // ============================================================================
 // HELPER FUNCTIONS (Refactored from duplicated code)
 // ============================================================================
@@ -414,4 +418,109 @@ const char* fat12_get_error_string(int error) {
         case FAT12_NOT_A_DIR: return "Not a directory";
         default: return "Unknown error";
     }
+}
+
+// ============================================================================
+// SUBDIRECTORY SUPPORT
+// ============================================================================
+
+const char* fat12_get_current_directory(void) {
+    return current_path;
+}
+
+int fat12_change_directory(const char *path) {
+    // Handle special cases
+    if (strcmp(path, "/") == 0) {
+        current_dir_cluster = 0;
+        strcpy(current_path, "/");
+        return FAT12_SUCCESS;
+    }
+    
+    if (strcmp(path, ".") == 0) {
+        return FAT12_SUCCESS; // Stay in current directory
+    }
+    
+    if (strcmp(path, "..") == 0) {
+        // Go to parent directory
+        if (current_dir_cluster == 0) {
+            return FAT12_SUCCESS; // Already at root
+        }
+        
+        // For simplicity, just go back to root
+        // Full implementation would track parent directories
+        current_dir_cluster = 0;
+        strcpy(current_path, "/");
+        return FAT12_SUCCESS;
+    }
+    
+    // Find directory in current location
+    directory_entry_t *found = fat12_find_file(path);
+    if (!found) return FAT12_NOT_FOUND;
+    
+    if (!(found->attributes & ATTR_DIRECTORY)) {
+        return FAT12_NOT_A_DIR;
+    }
+    
+    // Change to this directory
+    current_dir_cluster = found->first_cluster_low;
+    
+    // Update path
+    if (current_path[strlen(current_path) - 1] != '/') {
+        strcat(current_path, "/");
+    }
+    strcat(current_path, path);
+    
+    return FAT12_SUCCESS;
+}
+
+int fat12_create_directory(const char *name) {
+    // Check if directory already exists
+    if (fat12_find_file(name) != NULL) {
+        return FAT12_ALREADY_EXISTS;
+    }
+    
+    directory_entry_t *entry = fat12_find_free_root_entry();
+    if (!entry) return FAT12_DISK_FULL;
+    
+    // Parse directory name
+    char fat_name[11];
+    int result = fat12_parse_filename(name, fat_name);
+    if (result != FAT12_SUCCESS) return result;
+    
+    // Allocate cluster for directory
+    uint16_t dir_cluster = fat12_find_free_cluster();
+    if (dir_cluster == 0xFFFF) return FAT12_DISK_FULL;
+    
+    // Mark cluster as end of chain
+    fat12_set_fat_entry(dir_cluster, 0xFFF);
+    
+    // Initialize directory entry
+    memset((uint8_t*)entry, 0, sizeof(directory_entry_t));
+    memcpy(entry->name, fat_name, 8);
+    memcpy(entry->ext, fat_name + 8, 3);
+    entry->attributes = ATTR_DIRECTORY;
+    entry->first_cluster_low = dir_cluster;
+    entry->size = 0; // Directories have size 0
+    
+    // Initialize directory cluster with . and .. entries
+    uint8_t *dir_data = get_sector_ptr(DATA_START + (dir_cluster - 2));
+    memset(dir_data, 0, SECTOR_SIZE);
+    
+    directory_entry_t *dir_entries = (directory_entry_t*)dir_data;
+    
+    // Create "." entry (current directory)
+    memset((uint8_t*)&dir_entries[0], 0, sizeof(directory_entry_t));
+    memcpy(dir_entries[0].name, ".       ", 8);
+    memcpy(dir_entries[0].ext, "   ", 3);
+    dir_entries[0].attributes = ATTR_DIRECTORY;
+    dir_entries[0].first_cluster_low = dir_cluster;
+    
+    // Create ".." entry (parent directory)
+    memset((uint8_t*)&dir_entries[1], 0, sizeof(directory_entry_t));
+    memcpy(dir_entries[1].name, "..      ", 8);
+    memcpy(dir_entries[1].ext, "   ", 3);
+    dir_entries[1].attributes = ATTR_DIRECTORY;
+    dir_entries[1].first_cluster_low = current_dir_cluster; // Parent
+    
+    return FAT12_SUCCESS;
 }

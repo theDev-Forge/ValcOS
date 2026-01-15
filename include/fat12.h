@@ -63,4 +63,9 @@ uint32_t fat12_get_total_space(void);
 // Error handling
 const char* fat12_get_error_string(int error);
 
+// Subdirectory support
+int fat12_change_directory(const char *path);
+int fat12_create_directory(const char *name);
+const char* fat12_get_current_directory(void);
+
 #endif

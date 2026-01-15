@@ -76,7 +76,10 @@ static void shell_execute_command(const char* cmd) {
         vga_print("  fs_space   - Show filesystem space\n");
         vga_print("  fs_delete  - Delete file <filename>\n");
         vga_print("  time       - Display current time and date\n");
-        vga_print("  uptime     - Show system uptime\n\n");
+        vga_print("  uptime     - Show system uptime\n");
+        vga_print("  cd         - Change directory <path>\n");
+        vga_print("  mkdir      - Create directory <name>\n");
+        vga_print("  pwd        - Print working directory\n\n");
     }
     else if (cmd[0] == 'c' && cmd[1] == 'o' && cmd[2] == 'l' && cmd[3] == 'o' && cmd[4] == 'r') {
         // Parse simple integers for now: color 15 0
@@ -388,6 +391,33 @@ static void shell_execute_command(const char* cmd) {
         if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
         vga_print(buf);
         vga_print("s\n\n");
+    }
+    else if (cmd[0] == 'c' && cmd[1] == 'd' && (cmd[2] == '\0' || cmd[2] == ' ')) {
+        const char *path = (cmd[2] == ' ') ? cmd + 3 : "/";
+        int result = fat12_change_directory(path);
+        if (result == FAT12_SUCCESS) {
+            vga_print("\n");
+        } else {
+            vga_print("\nError: ");
+            vga_print(fat12_get_error_string(result));
+            vga_print("\n\n");
+        }
+    }
+    else if (cmd[0] == 'm' && cmd[1] == 'k' && cmd[2] == 'd' && cmd[3] == 'i' && cmd[4] == 'r' && cmd[5] == ' ') {
+        const char *dirname = cmd + 6;
+        int result = fat12_create_directory(dirname);
+        if (result == FAT12_SUCCESS) {
+            vga_print("\nDirectory created.\n\n");
+        } else {
+            vga_print("\nError: ");
+            vga_print(fat12_get_error_string(result));
+            vga_print("\n\n");
+        }
+    }
+    else if (strcmp(cmd, "pwd") == 0) {
+        vga_print("\n");
+        vga_print(fat12_get_current_directory());
+        vga_print("\n\n");
     }
     else if (strlen(cmd) > 0) {
         vga_print("\n");

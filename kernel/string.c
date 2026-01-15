@@ -27,6 +27,22 @@ char* strcpy(char* dest, const char* src) {
     return original_dest;
 }
 
+char* strcat(char* dest, const char* src) {
+    char* original_dest = dest;
+    // Move to end of dest
+    while (*dest) {
+        dest++;
+    }
+    // Copy src to end of dest
+    while (*src) {
+        *dest = *src;
+        dest++;
+        src++;
+    }
+    *dest = '\0';
+    return original_dest;
+}
+
 void* memset(void* ptr, int value, size_t num) {
     unsigned char* p = (unsigned char*)ptr;
     while (num--) {
