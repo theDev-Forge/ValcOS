@@ -7,6 +7,7 @@
 #include "process.h"
 #include "list.h"
 #include "slab.h"
+#include "printk.h"
 #include "pmm.h"
 #include "timer.h"
 #include "rtc.h"
@@ -78,6 +79,8 @@ static void shell_execute_command(const char* cmd) {
         vga_print("  timer_info - Display timer statistics\n");
         vga_print("  mem_stats  - Enhanced memory statistics\n");
         vga_print("  slabinfo   - Show slab allocator statistics\n");
+        vga_print("  loglevel   - Set kernel log level <0-7>\n");
+        vga_print("  test_log   - Test kernel logging\n");
         vga_print("  fs_space   - Show filesystem space\n");
         vga_print("  fs_delete  - Delete file <filename>\n");
         vga_print("  time       - Display current time and date\n");
@@ -284,6 +287,36 @@ static void shell_execute_command(const char* cmd) {
     }
     else if (strcmp(cmd, "slabinfo") == 0) {
         slab_stats();
+    }
+    else if (strncmp(cmd, "loglevel", 8) == 0) {
+        // Parse level
+        if (strlen(cmd) > 9) {
+            int level = cmd[9] - '0';
+            if (level >= 0 && level <= 7) {
+                printk_set_level(level);
+                vga_print("Log level set.\n");
+            } else {
+                vga_print("Invalid level (0-7).\n");
+            }
+        } else {
+            vga_print("Usage: loglevel <0-7>\n");
+            vga_print("Current level: ");
+            char buf[2];
+            buf[0] = '0' + printk_get_level();
+            buf[1] = 0;
+            vga_print(buf);
+            vga_print("\n");
+        }
+    }
+    else if (strcmp(cmd, "test_log") == 0) {
+        pr_emerg("Emergency message\n");
+        pr_alert("Alert message\n");
+        pr_crit("Critical message\n");
+        pr_err("Error message\n");
+        pr_warn("Warning message\n");
+        pr_notice("Notice message\n");
+        pr_info("Info message\n");
+        pr_debug("Debug message\n");
     }
     else if (strcmp(cmd, "fs_space") == 0) {
         uint32_t free_space = fat12_get_free_space();

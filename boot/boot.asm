@@ -8,7 +8,7 @@
     oem_name db "ValcOS  "
     bytes_per_sector dw 512
     sectors_per_cluster db 1
-    reserved_sectors dw 200     ; Reserved for Bootloader + Kernel
+    reserved_sectors dw 1024    ; Reserved for Bootloader + Kernel
     fat_count db 2
     root_entries dw 224
     total_sectors dw 2880
@@ -46,7 +46,7 @@ start:
     mov dh, 0           ; Head 0
     mov dl, [boot_drive] ; Use saved boot drive
     mov cx, 0x0002      ; CH=0 (Cyl), CL=2 (Sector)
-    mov si, 600         ; Read 600 sectors (Kernel + FS) to Ramdisk
+    mov si, 1024        ; Read 1024 sectors (Kernel + FS) to Ramdisk
 
 read_loop:
     push cx

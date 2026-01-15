@@ -1,10 +1,12 @@
 #include "pmm.h"
+#include "printk.h"
 #include "string.h"
-#include "vga.h"
 
-// Bitmap size: 128MB RAM / 4KB blocks = 32768 blocks.
-// 32768 bits / 32 = 1024 uint32_t entries (optimized!)
-#define MAX_BLOCKS 32768
+// Bitmap size calculation
+// 4GB RAM / 4KB Blocks = 1,048,576 Blocks
+// Bitmap needs 1 bit per block -> 1,048,576 bits
+// 1,048,576 / 32 bits per uint32_t = 32,768 uint32_t entries
+#define MAX_BLOCKS 1048576
 #define BITMAP_SIZE (MAX_BLOCKS / 32)
 
 static uint32_t pmm_bitmap[BITMAP_SIZE];
@@ -17,13 +19,13 @@ static inline void bitmap_set(uint32_t bit) {
 }
 
 // Helper: Clear bit in bitmap
-static inline void bitmap_clear(uint32_t bit) {
+static inline void bitmap_unset(uint32_t bit) {
     pmm_bitmap[bit / 32] &= ~(1 << (bit % 32));
 }
 
 // Helper: Test bit in bitmap
 static inline int bitmap_test(uint32_t bit) {
-    return (pmm_bitmap[bit / 32] & (1 << (bit % 32))) != 0;
+    return pmm_bitmap[bit / 32] & (1 << (bit % 32));
 }
 
 // Helper: Find first free bit (optimized with 32-bit scanning)
@@ -62,7 +64,7 @@ static uint32_t bitmap_find_free_contiguous(uint32_t count) {
 }
 
 void pmm_init(uint32_t mem_size) {
-    vga_print("Initializing PMM...\n");
+    pr_info("Initializing PMM...\n");
     
     total_blocks = mem_size / PMM_BLOCK_SIZE;
     if (total_blocks > MAX_BLOCKS) {
@@ -82,35 +84,15 @@ void pmm_init(uint32_t mem_size) {
     }
     
     // Display memory info
-    vga_print("PMM: Total Memory: ");
-    char buf[16];
     uint32_t total_mb = (total_blocks * PMM_BLOCK_SIZE) / (1024 * 1024);
-    // Simple integer to string
-    int idx = 0;
-    uint32_t val = total_mb;
-    if (val == 0) {
-        buf[idx++] = '0';
-    } else {
-        char temp[16];
-        int tidx = 0;
-        while (val > 0) {
-            temp[tidx++] = '0' + (val % 10);
-            val /= 10;
-        }
-        for (int i = tidx - 1; i >= 0; i--) {
-            buf[idx++] = temp[i];
-        }
-    }
-    buf[idx] = '\0';
-    vga_print(buf);
-    vga_print(" MB\n");
+    pr_info("PMM: Total Memory: %d MB\n", total_mb);
 }
 
 uint32_t pmm_alloc_block(void) {
     uint32_t block = bitmap_find_free();
     
     if (block == 0xFFFFFFFF) {
-        vga_print("PMM: Out of Memory!\n");
+        pr_err("PMM: Out of Memory!\n");
         return 0;
     }
     
@@ -123,7 +105,7 @@ void pmm_free_block(uint32_t addr) {
     uint32_t block = addr / PMM_BLOCK_SIZE;
     
     if (block < total_blocks && bitmap_test(block)) {
-        bitmap_clear(block);
+        bitmap_unset(block);  // Corrected function name
         used_blocks--;
     }
 }
@@ -135,7 +117,7 @@ uint32_t pmm_alloc_blocks(uint32_t count) {
     uint32_t start_block = bitmap_find_free_contiguous(count);
     
     if (start_block == 0xFFFFFFFF) {
-        vga_print("PMM: Cannot allocate contiguous blocks!\n");
+        pr_err("PMM: Cannot allocate contiguous blocks!\n");
         return 0;
     }
     

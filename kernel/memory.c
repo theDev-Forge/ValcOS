@@ -1,5 +1,5 @@
 #include "memory.h"
-#include "vga.h"
+#include "printk.h"
 #include "string.h"
 
 // Heap
@@ -67,5 +67,5 @@ void kfree(void *ptr) {
 void memory_init(void) {
     heap_init();
     
-    vga_print("Memory initialized.\n");
+    pr_info("Memory initialized.\n");
 }

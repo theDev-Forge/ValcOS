@@ -1,7 +1,7 @@
 #include "slab.h"
 #include "memory.h"
 #include "pmm.h"
-#include "vga.h"
+#include "printk.h"
 #include "string.h"
 
 // Global list of all caches
@@ -71,7 +71,7 @@ static void slab_destroy(kmem_cache_t *cache, slab_t *slab) {
 }
 
 void slab_init(void) {
-    vga_print("Initializing Slab Allocator...\n");
+    pr_info("Initializing Slab Allocator...\n");
     
     // Create common size caches for general allocation
     // These can replace kmalloc for common sizes
@@ -82,13 +82,11 @@ void slab_init(void) {
     for (int i = 0; i < 8; i++) {
         kmalloc_caches[i] = kmem_cache_create(names[i], sizes[i], 0, 0);
         if (!kmalloc_caches[i]) {
-            vga_print("Warning: Failed to create ");
-            vga_print(names[i]);
-            vga_print(" cache\n");
+            pr_warn("Failed to create %s cache\n", names[i]);
         }
     }
     
-    vga_print("Slab Allocator initialized.\n");
+    pr_info("Slab Allocator initialized.\n");
 }
 
 kmem_cache_t *kmem_cache_create(const char *name, size_t size, 
@@ -274,56 +272,20 @@ int kmem_cache_shrink(kmem_cache_t *cache) {
 void kmem_cache_info(kmem_cache_t *cache) {
     if (!cache) return;
     
-    vga_print("Cache: ");
-    vga_print(cache->name);
-    vga_print("\n  Object size: ");
-    
-    char buf[16];
-    int idx = 0;
-    uint32_t n = cache->object_size;
-    if(n==0) buf[idx++]='0'; 
-    else { 
-        char t[16]; 
-        int j=0; 
-        while(n>0){t[j++]='0'+(n%10);n/=10;} 
-        while(j>0) buf[idx++]=t[--j]; 
-    } 
-    buf[idx]=0;
-    vga_print(buf);
-    
-    vga_print(" bytes\n  Active objects: ");
-    idx = 0; n = cache->num_active;
-    if(n==0) buf[idx++]='0'; 
-    else { 
-        char t[16]; 
-        int j=0; 
-        while(n>0){t[j++]='0'+(n%10);n/=10;} 
-        while(j>0) buf[idx++]=t[--j]; 
-    } 
-    buf[idx]=0;
-    vga_print(buf);
-    
-    vga_print("\n  Total slabs: ");
-    idx = 0; n = cache->num_slabs;
-    if(n==0) buf[idx++]='0'; 
-    else { 
-        char t[16]; 
-        int j=0; 
-        while(n>0){t[j++]='0'+(n%10);n/=10;} 
-        while(j>0) buf[idx++]=t[--j]; 
-    } 
-    buf[idx]=0;
-    vga_print(buf);
-    vga_print("\n");
+    pr_info("Cache: %s\n", cache->name);
+    pr_info("  Object size:    %u bytes\n", cache->object_size);
+    pr_info("  Active objects: %u\n", cache->num_active);
+    pr_info("  Total slabs:    %u\n", cache->num_slabs);
+    pr_info("\n");
 }
 
 void slab_stats(void) {
-    vga_print("\n=== Slab Allocator Statistics ===\n");
+    pr_info("\n=== Slab Allocator Statistics ===\n");
     
     kmem_cache_t *cache;
     list_for_each_entry(cache, &cache_list, list) {
         kmem_cache_info(cache);
     }
     
-    vga_print("\n");
+    pr_info("\n");
 }

@@ -1,7 +1,7 @@
 #include "process.h"
 #include "memory.h"
 #include "slab.h"
-#include "vga.h"
+#include "printk.h"
 #include "tss.h"
 #include "vmm.h"
 #include "pmm.h"
@@ -28,12 +28,12 @@ static uint32_t calculate_time_slice(uint8_t priority) {
 extern void switch_to_task(process_t *next);
 
 void process_init(void) {
-    vga_print("Initializing Multitasking...\n");
+    pr_info("Initializing Multitasking...\n");
     
     // Create slab cache for process structures
     process_cache = kmem_cache_create("process_cache", sizeof(process_t), 0, 0);
     if (!process_cache) {
-        vga_print("ERROR: Failed to create process cache!\n");
+        pr_err("Failed to create process cache!\n");
         return;
     }
     
@@ -181,7 +181,6 @@ void schedule(void) {
         process_t *next = NULL;
         process_t *pos;
         int found = 0;
-        int wrapped = 0;
         
         // Start from the NEXT process in the list (proper round-robin)
         pos = list_entry(current_process->list.next, process_t, list);
@@ -252,36 +251,20 @@ void process_yield(void) {
 }
 
 void process_debug_list(void) {
-    vga_print("PID  | State\n");
-    vga_print("---- | -----\n");
+    pr_info("PID  | State\n");
+    pr_info("---- | -----\n");
     
     if (list_empty(&ready_queue)) return;
     
     process_t *proc;
     list_for_each_entry(proc, &ready_queue, list) {
-        char pid_str[16];
-        uint32_t pid = proc->pid;
-        
-        int i = 0;
-        if (pid == 0) pid_str[i++] = '0';
-        else {
-            char temp[16]; int j=0;
-            while(pid>0) { temp[j++]='0'+(pid%10); pid/=10; }
-            while(j>0) pid_str[i++] = temp[--j];
-        }
-        pid_str[i] = '\0';
-        
-        vga_print(pid_str);
-        // Padding
-        for(int k=i; k<5; k++) vga_print(" ");
-        vga_print("| ");
-        if (proc->pid == 0) vga_print("Kernel");
-        else vga_print("User");
-        
-        // Indicate current
-        if (proc == current_process) vga_print(" (*)");
-        
-        vga_print("\n");
+        pr_info("%d    | %s", proc->pid, 
+            (proc->state == PROCESS_RUNNING) ? "RUNNING" :
+            (proc->state == PROCESS_READY)   ? "READY" :
+            (proc->state == PROCESS_BLOCKED) ? "BLOCKED" : "UNKNOWN");
+            
+        if (proc == current_process) pr_info(" (*)");
+        pr_info("\n");
     }
 }
 

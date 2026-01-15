@@ -10,6 +10,9 @@ size_t strlen(const char* str);
 // String comparison
 int strcmp(const char* str1, const char* str2);
 
+// String comparison with length limit
+int strncmp(const char* str1, const char* str2, size_t n);
+
 // String copy
 char* strcpy(char* dest, const char* src);
 
