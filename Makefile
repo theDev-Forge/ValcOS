@@ -23,14 +23,14 @@ APPS_DIR = apps
 BOOT_SRC = $(BOOT_DIR)/boot.asm
 KERNEL_ENTRY_SRC = $(KERNEL_DIR)/kernel_entry.asm
 KERNEL_SRC = $(KERNEL_DIR)/kernel.c $(KERNEL_DIR)/idt.c $(KERNEL_DIR)/shell.c $(KERNEL_DIR)/string.c $(KERNEL_DIR)/memory.c $(KERNEL_DIR)/process.c $(KERNEL_DIR)/gdt.c $(KERNEL_DIR)/tss.c $(KERNEL_DIR)/syscall.c $(KERNEL_DIR)/pmm.c $(KERNEL_DIR)/vmm.c fs/fat12.c
-DRIVER_SRC = $(DRIVERS_DIR)/vga.c $(DRIVERS_DIR)/keyboard.c $(DRIVERS_DIR)/timer.c
+DRIVER_SRC = $(DRIVERS_DIR)/vga.c $(DRIVERS_DIR)/keyboard.c $(DRIVERS_DIR)/timer.c $(DRIVERS_DIR)/rtc.c
 
 # Object files
 BOOT_BIN = $(BUILD_DIR)/boot.bin
 KERNEL_ENTRY_OBJ = $(BUILD_DIR)/kernel_entry.o
 PROCESS_ASM_OBJ = $(BUILD_DIR)/process_asm.o
 KERNEL_OBJS = $(BUILD_DIR)/kernel.o $(BUILD_DIR)/idt.o $(BUILD_DIR)/shell.o $(BUILD_DIR)/string.o $(BUILD_DIR)/memory.o $(BUILD_DIR)/fat12.o $(BUILD_DIR)/process.o $(PROCESS_ASM_OBJ) $(BUILD_DIR)/gdt.o $(BUILD_DIR)/tss.o $(BUILD_DIR)/syscall.o $(BUILD_DIR)/pmm.o $(BUILD_DIR)/vmm.o
-DRIVER_OBJS = $(BUILD_DIR)/vga.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/timer.o $(BUILD_DIR)/vga_gfx.o
+DRIVER_OBJS = $(BUILD_DIR)/vga.o $(BUILD_DIR)/keyboard.o $(BUILD_DIR)/timer.o $(BUILD_DIR)/vga_gfx.o $(BUILD_DIR)/rtc.o
 
 # Output
 KERNEL_ELF = $(BUILD_DIR)/kernel.elf

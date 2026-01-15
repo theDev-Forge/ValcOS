@@ -6,6 +6,8 @@
 #include "memory.h"
 #include "process.h"
 #include "pmm.h"
+#include "timer.h"
+#include "rtc.h"
 
 #define CMD_BUFFER_SIZE 256
 
@@ -57,17 +59,24 @@ static void shell_print_prompt(void) {
 static void shell_execute_command(const char* cmd) {
     if (strcmp(cmd, "help") == 0) {
         vga_print_color("\nAvailable commands:\n", vga_color(VGA_COLOR_YELLOW, VGA_COLOR_BLACK));
-        vga_print("  help  - Display this help message\n");
-        vga_print("  clear - Clear the screen\n");
-        vga_print("  ls    - List files\n");
-        vga_print("  cat   - Read file content\n");
-        vga_print("  ps    - List processes\n");
-        vga_print("  mem   - Show memory usage\n");
-        vga_print("  kill  - Kill process <pid>\n");
-        vga_print("  kill  - Kill process <pid>\n");
-        vga_print("  color - Set text color <fg> <bg>\n");
-        vga_print("  about - Show OS information\n");
-        vga_print("  echo  - Print text to screen\n\n");
+        vga_print("  help       - Display this help message\n");
+        vga_print("  clear      - Clear the screen\n");
+        vga_print("  ls         - List files\n");
+        vga_print("  cat        - Read file content\n");
+        vga_print("  touch      - Create file\n");
+        vga_print("  write      - Write to file\n");
+        vga_print("  ps         - List processes\n");
+        vga_print("  mem        - Show memory usage\n");
+        vga_print("  kill       - Kill process <pid>\n");
+        vga_print("  color      - Set text color <fg> <bg>\n");
+        vga_print("  about      - Show OS information\n");
+        vga_print("  echo       - Print text to screen\n");
+        vga_print("  timer_info - Display timer statistics\n");
+        vga_print("  mem_stats  - Enhanced memory statistics\n");
+        vga_print("  fs_space   - Show filesystem space\n");
+        vga_print("  fs_delete  - Delete file <filename>\n");
+        vga_print("  time       - Display current time and date\n");
+        vga_print("  uptime     - Show system uptime\n\n");
     }
     else if (cmd[0] == 'c' && cmd[1] == 'o' && cmd[2] == 'l' && cmd[3] == 'o' && cmd[4] == 'r') {
         // Parse simple integers for now: color 15 0
@@ -201,16 +210,184 @@ static void shell_execute_command(const char* cmd) {
         }
         
         if (text) {
-             if (fat12_write_file(filename, (uint8_t*)text, strlen(text))) {
+             int result = fat12_write_file(filename, (uint8_t*)text, strlen(text));
+             if (result == 0) {
                   vga_print("\nFile written.\n\n");
              } else {
-                  vga_print("\nAvailable file not found to write.\n\n");
+                  vga_print("\nError: ");
+                  vga_print(fat12_get_error_string(result));
+                  vga_print("\n\n");
              }
              // Restore space for history integrity (optional)
              filename[i] = ' ';
         } else {
              vga_print("\nUsage: write <filename> <text>\n\n");
         }
+    }
+    else if (strcmp(cmd, "timer_info") == 0) {
+        uint32_t ticks, callbacks;
+        timer_get_stats(&ticks, &callbacks);
+        uint32_t uptime_ms = timer_get_uptime_ms();
+        
+        vga_print("\nTimer Statistics:\n");
+        vga_print("  Total Ticks: ");
+        char buf[16]; int idx=0; uint32_t n=ticks;
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        
+        vga_print("\n  Uptime (ms): ");
+        idx=0; n=uptime_ms;
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        
+        vga_print("\n  Callbacks Executed: ");
+        idx=0; n=callbacks;
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        vga_print("\n\n");
+    }
+    else if (strcmp(cmd, "mem_stats") == 0) {
+        uint32_t total, used;
+        pmm_get_stats(&total, &used);
+        uint32_t free_mem = pmm_get_free_memory();
+        uint32_t total_mem = pmm_get_total_memory();
+        
+        vga_print("\nMemory Statistics:\n");
+        vga_print("  PMM Total Blocks: ");
+        char buf[16]; int idx=0; uint32_t n=total;
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        
+        vga_print("\n  PMM Used Blocks:  ");
+        idx=0; n=used;
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        
+        vga_print("\n  Free Memory (KB): ");
+        idx=0; n=free_mem/1024;
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        
+        vga_print("\n  Total Memory (KB): ");
+        idx=0; n=total_mem/1024;
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        vga_print("\n\n");
+    }
+    else if (strcmp(cmd, "fs_space") == 0) {
+        uint32_t free_space = fat12_get_free_space();
+        uint32_t total_space = fat12_get_total_space();
+        uint32_t used_space = total_space - free_space;
+        
+        vga_print("\nFilesystem Space:\n");
+        vga_print("  Total: ");
+        char buf[16]; int idx=0; uint32_t n=total_space;
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        vga_print(" bytes\n");
+        
+        vga_print("  Used:  ");
+        idx=0; n=used_space;
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        vga_print(" bytes\n");
+        
+        vga_print("  Free:  ");
+        idx=0; n=free_space;
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        vga_print(" bytes\n\n");
+    }
+    else if (cmd[0] == 'f' && cmd[1] == 's' && cmd[2] == '_' && cmd[3] == 'd' && cmd[4] == 'e' && cmd[5] == 'l' && cmd[6] == 'e' && cmd[7] == 't' && cmd[8] == 'e' && cmd[9] == ' ') {
+        const char *filename = cmd + 10;
+        int result = fat12_delete_file(filename);
+        if (result == 0) {
+            vga_print("\nFile deleted.\n\n");
+        } else {
+            vga_print("\nError: ");
+            vga_print(fat12_get_error_string(result));
+            vga_print("\n\n");
+        }
+    }
+    else if (strcmp(cmd, "time") == 0) {
+        uint8_t hour, minute, second;
+        uint16_t year;
+        uint8_t month, day;
+        
+        rtc_read_time(&hour, &minute, &second);
+        rtc_read_date(&year, &month, &day);
+        
+        vga_print("\nCurrent Time: ");
+        char buf[16]; int idx=0; uint32_t n;
+        
+        // Hour
+        n=hour;
+        if(n<10) buf[idx++]='0';
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        vga_print(":");
+        
+        // Minute
+        idx=0; n=minute;
+        if(n<10) buf[idx++]='0';
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        vga_print(":");
+        
+        // Second
+        idx=0; n=second;
+        if(n<10) buf[idx++]='0';
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        
+        vga_print("\nCurrent Date: ");
+        
+        // Year
+        idx=0; n=year;
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        vga_print("-");
+        
+        // Month
+        idx=0; n=month;
+        if(n<10) buf[idx++]='0';
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        vga_print("-");
+        
+        // Day
+        idx=0; n=day;
+        if(n<10) buf[idx++]='0';
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        vga_print("\n\n");
+    }
+    else if (strcmp(cmd, "uptime") == 0) {
+        uint32_t uptime_ms = timer_get_uptime_ms();
+        uint32_t seconds = uptime_ms / 1000;
+        uint32_t minutes = seconds / 60;
+        uint32_t hours = minutes / 60;
+        
+        seconds %= 60;
+        minutes %= 60;
+        
+        vga_print("\nSystem Uptime: ");
+        char buf[16]; int idx=0; uint32_t n;
+        
+        n=hours;
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        vga_print("h ");
+        
+        idx=0; n=minutes;
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        vga_print("m ");
+        
+        idx=0; n=seconds;
+        if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+        vga_print(buf);
+        vga_print("s\n\n");
     }
     else if (strlen(cmd) > 0) {
         vga_print("\n");
