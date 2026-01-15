@@ -66,6 +66,8 @@ static void shell_execute_command(const char* cmd) {
         vga_print("  touch      - Create file\n");
         vga_print("  write      - Write to file\n");
         vga_print("  ps         - List processes\n");
+        vga_print("  top        - Show processes with CPU usage\n");
+        vga_print("  nice       - Set process priority <pid> <priority>\n");
         vga_print("  mem        - Show memory usage\n");
         vga_print("  kill       - Kill process <pid>\n");
         vga_print("  color      - Set text color <fg> <bg>\n");
@@ -418,6 +420,87 @@ static void shell_execute_command(const char* cmd) {
         vga_print("\n");
         vga_print(fat12_get_current_directory());
         vga_print("\n\n");
+    }
+    else if (cmd[0] == 'n' && cmd[1] == 'i' && cmd[2] == 'c' && cmd[3] == 'e' && cmd[4] == ' ') {
+        // Parse: nice <pid> <priority>
+        const char *args = cmd + 5;
+        uint32_t pid = 0;
+        uint8_t priority = 0;
+        
+        // Parse PID
+        while (*args >= '0' && *args <= '9') {
+            pid = pid * 10 + (*args - '0');
+            args++;
+        }
+        
+        // Skip space
+        while (*args == ' ') args++;
+        
+        // Parse priority
+        while (*args >= '0' && *args <= '9') {
+            priority = priority * 10 + (*args - '0');
+            args++;
+        }
+        
+        process_set_priority(pid, priority);
+        vga_print("\nPriority updated.\n\n");
+    }
+    else if (strcmp(cmd, "top") == 0) {
+        vga_print("\nPID  | Priority | Runtime | State\n");
+        vga_print("---- | -------- | ------- | --------\n");
+        
+        // We need to iterate through processes and display stats
+        // This is a simplified version - ideally we'd have a helper in process.c
+        extern process_t *ready_queue_head;
+        extern process_t *current_process;
+        
+        if (!ready_queue_head) {
+            vga_print("No processes.\n\n");
+        } else {
+            process_t *curr = ready_queue_head;
+            do {
+                char buf[16]; int idx;
+                
+                // PID
+                uint32_t n = curr->pid;
+                idx = 0;
+                if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+                vga_print(buf);
+                for(int k=idx; k<5; k++) vga_print(" ");
+                vga_print("| ");
+                
+                // Priority
+                n = curr->priority;
+                idx = 0;
+                if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+                vga_print(buf);
+                for(int k=idx; k<9; k++) vga_print(" ");
+                vga_print("| ");
+                
+                // Runtime
+                n = curr->total_runtime;
+                idx = 0;
+                if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
+                vga_print(buf);
+                for(int k=idx; k<8; k++) vga_print(" ");
+                vga_print("| ");
+                
+                // State
+                switch(curr->state) {
+                    case PROCESS_READY: vga_print("READY"); break;
+                    case PROCESS_RUNNING: vga_print("RUNNING"); break;
+                    case PROCESS_BLOCKED: vga_print("BLOCKED"); break;
+                    case PROCESS_TERMINATED: vga_print("TERMINATED"); break;
+                    default: vga_print("UNKNOWN"); break;
+                }
+                
+                if (curr == current_process) vga_print(" (*)");
+                vga_print("\n");
+                
+                curr = curr->next;
+            } while (curr != ready_queue_head);
+            vga_print("\n");
+        }
     }
     else if (strlen(cmd) > 0) {
         vga_print("\n");
