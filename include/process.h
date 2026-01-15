@@ -58,4 +58,8 @@ void process_block(uint32_t pid);
 void process_unblock(uint32_t pid);
 void process_get_stats(uint32_t pid, uint32_t *runtime, uint8_t *priority, process_state_t *state);
 
+// Fork and wait
+int process_fork(void);
+int process_wait(int pid, int *status);
+
 #endif

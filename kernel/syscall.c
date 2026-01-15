@@ -16,8 +16,7 @@ void sys_exit(int status) {
 }
 
 int sys_fork(void) {
-    pr_warn("fork() not yet implemented\n");
-    return -1;  // TODO: Implement process cloning
+    return process_fork();
 }
 
 int sys_read(int fd, void *buf, size_t count) {
@@ -44,11 +43,8 @@ int sys_close(int fd) {
 }
 
 int sys_waitpid(int pid, int *status, int options) {
-    (void)pid;
-    (void)status;
     (void)options;
-    pr_warn("waitpid() not yet implemented\n");
-    return -1;  // TODO: Implement process waiting
+    return process_wait(pid, status);
 }
 
 int sys_execve(const char *path, char *const argv[], char *const envp[]) {
