@@ -27,6 +27,23 @@ char* strcpy(char* dest, const char* src) {
     return original_dest;
 }
 
+char* strncpy(char* dest, const char* src, size_t n) {
+    char* original_dest = dest;
+    size_t i;
+    
+    // Copy up to n characters from src to dest
+    for (i = 0; i < n && src[i] != '\0'; i++) {
+        dest[i] = src[i];
+    }
+    
+    // Pad with null bytes if src is shorter than n
+    for (; i < n; i++) {
+        dest[i] = '\0';
+    }
+    
+    return original_dest;
+}
+
 char* strcat(char* dest, const char* src) {
     char* original_dest = dest;
     // Move to end of dest

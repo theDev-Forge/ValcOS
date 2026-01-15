@@ -7,6 +7,7 @@
 #include "memory.h"
 #include "pmm.h"
 #include "vmm.h"
+#include "slab.h"
 #include "fat12.h"
 #include "process.h"
 #include "shell.h" // Keep shell.h for shell_init and shell_run
@@ -48,6 +49,9 @@ void kernel_main(void) {
     
     // Initialize VMM (Enable Paging)
     vmm_init();
+    
+    // Initialize Slab Allocator
+    slab_init();
     
     // Initialize FAT12 (Ramdisk)
     fat12_init();

@@ -2,6 +2,7 @@
 #define PROCESS_H
 
 #include <stdint.h>
+#include "list.h"
 
 // Process states
 typedef enum {
@@ -16,7 +17,7 @@ typedef struct process {
     uint32_t pid;        // Process ID
     uint32_t kernel_stack_top; // For TSS: where to restart kernel stack on interrupt
     uint32_t cr3;        // Page Directory Physical Address
-    struct process *next;// Next process in linked list
+    struct list_head list;     // Linux-style linked list node
     
     // Preemptive multitasking fields
     process_state_t state;      // Current process state

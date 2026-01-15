@@ -1,5 +1,6 @@
 #include "process.h"
 #include "memory.h"
+#include "slab.h"
 #include "vga.h"
 #include "tss.h"
 #include "vmm.h"
@@ -7,9 +8,11 @@
 #include "string.h"
 
 process_t *current_process = NULL;
-process_t *ready_queue_head = NULL;
-process_t *ready_queue_tail = NULL;
+LIST_HEAD(ready_queue);  // Linux-style list head for ready queue
 uint32_t next_pid = 1;
+
+// Slab cache for process structures
+static kmem_cache_t *process_cache = NULL;
 
 // Scheduler configuration
 #define DEFAULT_TIME_SLICE 10
@@ -27,7 +30,15 @@ extern void switch_to_task(process_t *next);
 void process_init(void) {
     vga_print("Initializing Multitasking...\n");
     
-    process_t *kernel_proc = (process_t*)kmalloc(sizeof(process_t));
+    // Create slab cache for process structures
+    process_cache = kmem_cache_create("process_cache", sizeof(process_t), 0, 0);
+    if (!process_cache) {
+        vga_print("ERROR: Failed to create process cache!\n");
+        return;
+    }
+    
+    // Allocate kernel process from cache
+    process_t *kernel_proc = (process_t*)kmem_cache_alloc(process_cache);
     kernel_proc->pid = 0;
     kernel_proc->esp = 0;
     kernel_proc->cr3 = vmm_get_kernel_directory();
@@ -43,18 +54,18 @@ void process_init(void) {
     kernel_proc->total_runtime = 0;
     strcpy(kernel_proc->name, "kernel");
     
-    kernel_proc->next = kernel_proc;
+    // Initialize list node and add to ready queue
+    INIT_LIST_HEAD(&kernel_proc->list);
+    list_add_tail(&kernel_proc->list, &ready_queue);
     
     current_process = kernel_proc;
-    ready_queue_head = kernel_proc;
-    ready_queue_tail = kernel_proc;
 }
 
 void process_create(void (*entry_point)(void)) {
-    process_t *proc = (process_t*)kmalloc(sizeof(process_t));
+    // Allocate process from slab cache
+    process_t *proc = (process_t*)kmem_cache_alloc(process_cache);
     proc->pid = next_pid++;
     proc->cr3 = vmm_get_kernel_directory();
-    proc->next = NULL;
     
     // Initialize new fields
     proc->state = PROCESS_READY;
@@ -81,25 +92,18 @@ void process_create(void (*entry_point)(void)) {
     
     proc->esp = (uint32_t)top;
     
-    if (ready_queue_tail) {
-        ready_queue_tail->next = proc;
-        ready_queue_tail = proc;
-        proc->next = ready_queue_head;
-    } else {
-        ready_queue_head = proc;
-        ready_queue_tail = proc;
-        proc->next = proc;
-    }
+    // Add to ready queue using Linux-style list
+    INIT_LIST_HEAD(&proc->list);
+    list_add_tail(&proc->list, &ready_queue);
 }
 
 extern void enter_user_mode(void);
 
 void process_create_user(void (*entry_point)(void)) {
-    // 1. Allocate PCB
-    process_t *proc = (process_t*)kmalloc(sizeof(process_t));
+    // 1. Allocate PCB from slab cache
+    process_t *proc = (process_t*)kmem_cache_alloc(process_cache);
     proc->pid = next_pid++;
     proc->cr3 = vmm_get_kernel_directory();
-    proc->next = NULL;
 
     // 2. Allocate Kernel Stack (4KB)
     uint32_t *kstack = (uint32_t*)kmalloc(4096);
@@ -151,16 +155,9 @@ void process_create_user(void (*entry_point)(void)) {
 
     proc->esp = (uint32_t)ktop;
 
-    // 6. Add to Queue
-    if (ready_queue_tail) {
-        ready_queue_tail->next = proc;
-        ready_queue_tail = proc;
-        proc->next = ready_queue_head;
-    } else {
-        ready_queue_head = proc;
-        ready_queue_tail = proc;
-        proc->next = proc;
-    }
+    // 6. Add to Queue using Linux-style list
+    INIT_LIST_HEAD(&proc->list);
+    list_add_tail(&proc->list, &ready_queue);
 }
 
 void schedule(void) {
@@ -180,29 +177,43 @@ void schedule(void) {
             current_process->state = PROCESS_READY;
         }
         
-        // Find next READY process (skip BLOCKED and TERMINATED)
-        process_t *next = current_process->next;
-        int searched = 0;
-        int total_processes = 0;
+        // Find next READY process using proper round-robin
+        process_t *next = NULL;
+        process_t *pos;
+        int found = 0;
+        int wrapped = 0;
         
-        // Count total processes
-        process_t *counter = ready_queue_head;
-        do {
-            total_processes++;
-            counter = counter->next;
-        } while (counter != ready_queue_head);
+        // Start from the NEXT process in the list (proper round-robin)
+        pos = list_entry(current_process->list.next, process_t, list);
         
-        // Search for next READY process
-        while (searched < total_processes) {
-            if (next->state == PROCESS_READY || next->state == PROCESS_RUNNING) {
+        // Search from current->next to end of list
+        while (&pos->list != &ready_queue) {
+            if (pos != current_process && 
+                (pos->state == PROCESS_READY || pos->state == PROCESS_RUNNING)) {
+                next = pos;
+                found = 1;
                 break;
             }
-            next = next->next;
-            searched++;
+            pos = list_entry(pos->list.next, process_t, list);
         }
         
-        // If no READY process found, stay with current
-        if (searched >= total_processes) return;
+        // If not found, wrap around and search from beginning to current
+        if (!found) {
+            list_for_each_entry(pos, &ready_queue, list) {
+                if (pos == current_process) break;
+                if (pos->state == PROCESS_READY || pos->state == PROCESS_RUNNING) {
+                    next = pos;
+                    found = 1;
+                    break;
+                }
+            }
+        }
+        
+        // If no other ready process found, keep running current
+        if (!found || next == NULL) {
+            current_process->state = PROCESS_RUNNING;
+            return;
+        }
         
         // Don't switch if we're switching to ourselves
         if (next == current_process) {
@@ -244,12 +255,12 @@ void process_debug_list(void) {
     vga_print("PID  | State\n");
     vga_print("---- | -----\n");
     
-    if (!ready_queue_head) return;
+    if (list_empty(&ready_queue)) return;
     
-    process_t *curr = ready_queue_head;
-    do {
+    process_t *proc;
+    list_for_each_entry(proc, &ready_queue, list) {
         char pid_str[16];
-        uint32_t pid = curr->pid;
+        uint32_t pid = proc->pid;
         
         int i = 0;
         if (pid == 0) pid_str[i++] = '0';
@@ -264,72 +275,38 @@ void process_debug_list(void) {
         // Padding
         for(int k=i; k<5; k++) vga_print(" ");
         vga_print("| ");
-        if (curr->pid == 0) vga_print("Kernel");
+        if (proc->pid == 0) vga_print("Kernel");
         else vga_print("User");
         
         // Indicate current
-        if (curr == current_process) vga_print(" (*)");
+        if (proc == current_process) vga_print(" (*)");
         
         vga_print("\n");
-        
-        curr = curr->next;
-    } while (curr != ready_queue_head && curr != NULL);
+    }
 }
 
 int process_kill(uint32_t pid) {
     if (pid == 0) return 0; // Cannot kill kernel
-    if (!ready_queue_head) return 0;
+    if (list_empty(&ready_queue)) return 0;
     
-    process_t *curr = ready_queue_head;
-
-    
-    // Find prev to current head to handle circular cases correct (or iterate)
-    // Actually, simple traversal:
-    // Since it's circular, we need to find the node BEFORE the target.
-    
-    // Safety check just in case
-    if (ready_queue_head->next == ready_queue_head) {
-        // Only one process (Kernel). Can't kill it.
-        if (ready_queue_head->pid == pid) return 0;
-        return 0; // Not found
-    }
-    
-    process_t *target = NULL;
-    process_t *target_prev = NULL;
-    
-    curr = ready_queue_head;
-    do {
-        if (curr->next->pid == pid) {
-            target_prev = curr;
-            target = curr->next;
-            break;
+    process_t *proc, *tmp;
+    list_for_each_entry_safe(proc, tmp, &ready_queue, list) {
+        if (proc->pid == pid) {
+            // Remove from list
+            list_del(&proc->list);
+            
+            // Free process back to slab cache
+            // NOTE: Memory leak here for stack/page directory.
+            // Fixing memory leaks is a separate task.
+            kmem_cache_free(process_cache, proc);
+            
+            // If we killed the running process, we MUST schedule immediately
+            if (proc == current_process) {
+                schedule();
+                // We never return here if we switched away
+            }
+            return 1;
         }
-        curr = curr->next;
-    } while (curr != ready_queue_head);
-    
-    if (target) {
-        // Unlink
-        target_prev->next = target->next;
-        
-        // Fix head/tail if needed
-        if (target == ready_queue_head) ready_queue_head = target->next;
-        if (target == ready_queue_tail) ready_queue_tail = target_prev;
-        
-        // Free Memory
-        // Free Stack (We allocated stack + PCB in one block logic or separate?)
-        // In create_user: stack is separate pages. 
-        // We really need to free the pages!
-        // But for now, let's just free the PCB structure. 
-        // NOTE: Memory leak here for stack/page directory. 
-        // Fixing memory leaks is a separate task.
-        kfree(target);
-        
-        // If we killed the running process, we MUST schedule immediately
-        if (target == current_process) {
-            schedule();
-            // We never return here if we switched away
-        }
-        return 1;
     }
     
     return 0;
@@ -340,60 +317,56 @@ int process_kill(uint32_t pid) {
 // ============================================================================
 
 void process_set_priority(uint32_t pid, uint8_t priority) {
-    if (!ready_queue_head) return;
+    if (list_empty(&ready_queue)) return;
     
-    process_t *curr = ready_queue_head;
-    do {
-        if (curr->pid == pid) {
-            curr->priority = priority;
-            curr->time_slice = calculate_time_slice(priority);
+    process_t *proc;
+    list_for_each_entry(proc, &ready_queue, list) {
+        if (proc->pid == pid) {
+            proc->priority = priority;
+            proc->time_slice = calculate_time_slice(priority);
             return;
         }
-        curr = curr->next;
-    } while (curr != ready_queue_head);
+    }
 }
 
 void process_block(uint32_t pid) {
-    if (!ready_queue_head) return;
+    if (list_empty(&ready_queue)) return;
     
-    process_t *curr = ready_queue_head;
-    do {
-        if (curr->pid == pid) {
-            curr->state = PROCESS_BLOCKED;
+    process_t *proc;
+    list_for_each_entry(proc, &ready_queue, list) {
+        if (proc->pid == pid) {
+            proc->state = PROCESS_BLOCKED;
             // If blocking current process, force reschedule
-            if (curr == current_process) {
+            if (proc == current_process) {
                 schedule();
             }
             return;
         }
-        curr = curr->next;
-    } while (curr != ready_queue_head);
+    }
 }
 
 void process_unblock(uint32_t pid) {
-    if (!ready_queue_head) return;
+    if (list_empty(&ready_queue)) return;
     
-    process_t *curr = ready_queue_head;
-    do {
-        if (curr->pid == pid && curr->state == PROCESS_BLOCKED) {
-            curr->state = PROCESS_READY;
+    process_t *proc;
+    list_for_each_entry(proc, &ready_queue, list) {
+        if (proc->pid == pid && proc->state == PROCESS_BLOCKED) {
+            proc->state = PROCESS_READY;
             return;
         }
-        curr = curr->next;
-    } while (curr != ready_queue_head);
+    }
 }
 
 void process_get_stats(uint32_t pid, uint32_t *runtime, uint8_t *priority, process_state_t *state) {
-    if (!ready_queue_head) return;
+    if (list_empty(&ready_queue)) return;
     
-    process_t *curr = ready_queue_head;
-    do {
-        if (curr->pid == pid) {
-            if (runtime) *runtime = curr->total_runtime;
-            if (priority) *priority = curr->priority;
-            if (state) *state = curr->state;
+    process_t *proc;
+    list_for_each_entry(proc, &ready_queue, list) {
+        if (proc->pid == pid) {
+            if (runtime) *runtime = proc->total_runtime;
+            if (priority) *priority = proc->priority;
+            if (state) *state = proc->state;
             return;
         }
-        curr = curr->next;
-    } while (curr != ready_queue_head);
+    }
 }

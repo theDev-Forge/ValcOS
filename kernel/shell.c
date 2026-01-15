@@ -5,6 +5,8 @@
 #include "fat12.h"
 #include "memory.h"
 #include "process.h"
+#include "list.h"
+#include "slab.h"
 #include "pmm.h"
 #include "timer.h"
 #include "rtc.h"
@@ -75,6 +77,7 @@ static void shell_execute_command(const char* cmd) {
         vga_print("  echo       - Print text to screen\n");
         vga_print("  timer_info - Display timer statistics\n");
         vga_print("  mem_stats  - Enhanced memory statistics\n");
+        vga_print("  slabinfo   - Show slab allocator statistics\n");
         vga_print("  fs_space   - Show filesystem space\n");
         vga_print("  fs_delete  - Delete file <filename>\n");
         vga_print("  time       - Display current time and date\n");
@@ -279,6 +282,9 @@ static void shell_execute_command(const char* cmd) {
         vga_print(buf);
         vga_print("\n\n");
     }
+    else if (strcmp(cmd, "slabinfo") == 0) {
+        slab_stats();
+    }
     else if (strcmp(cmd, "fs_space") == 0) {
         uint32_t free_space = fat12_get_free_space();
         uint32_t total_space = fat12_get_total_space();
@@ -450,19 +456,18 @@ static void shell_execute_command(const char* cmd) {
         vga_print("---- | -------- | ------- | --------\n");
         
         // We need to iterate through processes and display stats
-        // This is a simplified version - ideally we'd have a helper in process.c
-        extern process_t *ready_queue_head;
+        extern struct list_head ready_queue;
         extern process_t *current_process;
         
-        if (!ready_queue_head) {
+        if (list_empty(&ready_queue)) {
             vga_print("No processes.\n\n");
         } else {
-            process_t *curr = ready_queue_head;
-            do {
+            process_t *proc;
+            list_for_each_entry(proc, &ready_queue, list) {
                 char buf[16]; int idx;
                 
                 // PID
-                uint32_t n = curr->pid;
+                uint32_t n = proc->pid;
                 idx = 0;
                 if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
                 vga_print(buf);
@@ -470,7 +475,7 @@ static void shell_execute_command(const char* cmd) {
                 vga_print("| ");
                 
                 // Priority
-                n = curr->priority;
+                n = proc->priority;
                 idx = 0;
                 if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
                 vga_print(buf);
@@ -478,7 +483,7 @@ static void shell_execute_command(const char* cmd) {
                 vga_print("| ");
                 
                 // Runtime
-                n = curr->total_runtime;
+                n = proc->total_runtime;
                 idx = 0;
                 if(n==0) buf[idx++]='0'; else { char t[16]; int j=0; while(n>0){t[j++]='0'+(n%10);n/=10;} while(j>0) buf[idx++]=t[--j]; } buf[idx]=0;
                 vga_print(buf);
@@ -486,7 +491,7 @@ static void shell_execute_command(const char* cmd) {
                 vga_print("| ");
                 
                 // State
-                switch(curr->state) {
+                switch(proc->state) {
                     case PROCESS_READY: vga_print("READY"); break;
                     case PROCESS_RUNNING: vga_print("RUNNING"); break;
                     case PROCESS_BLOCKED: vga_print("BLOCKED"); break;
@@ -494,11 +499,9 @@ static void shell_execute_command(const char* cmd) {
                     default: vga_print("UNKNOWN"); break;
                 }
                 
-                if (curr == current_process) vga_print(" (*)");
+                if (proc == current_process) vga_print(" (*)");
                 vga_print("\n");
-                
-                curr = curr->next;
-            } while (curr != ready_queue_head);
+            }
             vga_print("\n");
         }
     }
